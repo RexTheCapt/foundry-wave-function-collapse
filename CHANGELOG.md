@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+
+- New collections start with the compatible tags `wall: floor`; mappings without the key assume it.
+- The collection editor can filter the tile list by tag, on any side or on one chosen side.
+
 ## 0.8.0
 
 - Sample collection rebuilt with one-sided walls and compatible tags: the tile tagged `wall` draws

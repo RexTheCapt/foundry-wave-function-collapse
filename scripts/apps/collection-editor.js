@@ -1,7 +1,7 @@
 import { TEMPLATES } from "../constants.js";
 import { getFilePicker, listImageFiles, loadCollection, relativeTileFile, saveMapping } from "../collections.js";
 import { describeTags, emptyTileEntry, compatibleToText, compatibleFromText } from "../lib/mapping.js";
-import { normalizeTags } from "../lib/wfc.js";
+import { normalizeTags, sideAlternatives, SIDES } from "../lib/wfc.js";
 import { TileEditor } from "./tile-editor.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin, DialogV2 } = foundry.applications.api;
@@ -31,6 +31,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
     super({ ...options, id: `wfc-collection-${options.dir.replace(/[^a-z0-9]+/gi, "-")}` });
     this.dir = options.dir;
     this.collection = null;
+    this.filter = { text: "", side: "any" };
   }
 
   get title() {
@@ -44,6 +45,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
       file,
       src: `${this.dir}/${file}`,
       tags: describeTags(entry.tags),
+      tagsJson: JSON.stringify(entry.tags),
       walls: entry.walls.length,
       weight: entry.weight,
       rotate: entry.rotate
@@ -57,8 +59,39 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
       compatible: compatibleToText(mapping.compatible),
       hasMapping: this.collection.hasMapping,
       error: this.collection.error,
-      tiles
+      tiles,
+      filter: this.filter,
+      sides: SIDES.map(s => ({ value: s, label: s.toUpperCase(), selected: this.filter.side === s }))
     };
+  }
+
+  /** Attach the tag filter and apply it without re-rendering, so typing keeps focus. */
+  _onRender() {
+    const root = this.element;
+    const text = root.querySelector("input[name=filterText]");
+    const side = root.querySelector("select[name=filterSide]");
+    const count = root.querySelector("[data-filter-count]");
+    if (!text || !side) return;
+    const apply = () => {
+      this.filter = { text: text.value, side: side.value };
+      const q = text.value.trim().toLowerCase();
+      const sides = side.value === "any" ? SIDES : [side.value];
+      let shown = 0;
+      let total = 0;
+      for (const card of root.querySelectorAll(".wfc-tile-card")) {
+        total++;
+        let tags = {};
+        try { tags = JSON.parse(card.dataset.tags || "{}"); } catch { /* ignore */ }
+        const match = !q || sides.some(s => sideAlternatives(tags[s]).some(alt => alt.some(t => String(t).toLowerCase().includes(q))));
+        card.hidden = !match;
+        if (match) shown++;
+      }
+      if (count) count.textContent = game.i18n.format("WFC.Editor.FilterCount", { shown, total });
+    };
+    text.addEventListener("input", apply);
+    text.addEventListener("keydown", event => { if (event.key === "Enter") event.preventDefault(); });
+    side.addEventListener("change", apply);
+    apply();
   }
 
   /** Read the metadata inputs into the in-memory mapping. */

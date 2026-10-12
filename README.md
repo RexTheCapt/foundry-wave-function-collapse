@@ -132,7 +132,8 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 - **New collection** creates a directory under the configured root
   (default `worlds/<world>/wfc-collections/<name>`) with an empty `mapping.json`.
 - **Add existing directory** registers any directory in your user data.
-- Inside a collection, **Add tile** opens a file picker rooted at the collection directory. Use the
+- Inside a collection, filter the tile list by tag, on any side or on one chosen side, to find the
+  tiles that carry a given tag. **Add tile** opens a file picker rooted at the collection directory. Use the
   picker's upload button to copy images into it. **Scan directory** maps every image that is not in
   the mapping yet.
 - Each tile has tags per side, a weight, a rotation flag and a wall editor. In the wall editor click
@@ -219,7 +220,8 @@ Each collection directory contains a `mapping.json` that maps every tile image i
 - `boundary` pre-fills the boundary tags in the generate dialog.
 - `restricted` pre-fills "Only where marked" in the generate dialog.
 - `compatible` maps a tag to the tags it may face, e.g. `{ "wall": ["floor"] }`. The relation is
-  symmetric; tables of all selected collections are merged.
+  symmetric; tables of all selected collections are merged. New collections start with
+  `wall: floor`, which is also assumed when the key is missing; write `{}` to disable it.
 
 You can edit the file by hand; the collection editor reloads it from disk.
 

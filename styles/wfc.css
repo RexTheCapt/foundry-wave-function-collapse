@@ -67,3 +67,7 @@
 .wfc-picker-card img { width: 80px; height: 80px; object-fit: cover; border: 1px solid rgba(0,0,0,0.4); }
 .wfc-picker-card .wfc-picker-name { font-size: 0.75em; word-break: break-all; text-align: center; user-select: none; }
 .wfc-picker-card.wfc-picker-blocked { opacity: 0.45; }
+
+/* Collection editor tag filter */
+.wfc-filter input[type=text] { flex: 1 1 160px; min-width: 120px; }
+.wfc-filter select { flex: 0 0 auto; width: auto; }

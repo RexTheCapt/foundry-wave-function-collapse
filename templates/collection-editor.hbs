@@ -38,9 +38,18 @@
   <button type="submit"><i class="fa-solid fa-floppy-disk"></i> {{localize "WFC.Editor.Save"}}</button>
 </div>
 <p class="hint">{{localize "WFC.Editor.AddTileHint"}}</p>
+<div class="wfc-toolbar wfc-filter">
+  <i class="fa-solid fa-filter"></i>
+  <input type="text" name="filterText" value="{{filter.text}}" placeholder="{{localize 'WFC.Editor.FilterPlaceholder'}}">
+  <select name="filterSide">
+    <option value="any" {{#if (eq filter.side "any")}}selected{{/if}}>{{localize "WFC.Editor.FilterAny"}}</option>
+    {{#each sides as |s|}}<option value="{{s.value}}" {{#if s.selected}}selected{{/if}}>{{s.label}}</option>{{/each}}
+  </select>
+  <span class="wfc-meta" data-filter-count></span>
+</div>
 <div class="wfc-tile-list">
   {{#each tiles as |t|}}
-  <div class="wfc-tile-card" data-file="{{t.file}}">
+  <div class="wfc-tile-card" data-file="{{t.file}}" data-tags="{{t.tagsJson}}">
     <img src="{{t.src}}" alt="{{t.file}}" loading="lazy">
     <div class="wfc-tile-body">
       <strong title="{{t.file}}">{{t.file}}</strong>

@@ -415,3 +415,11 @@ test("one-sided sample walls stay on the same side along a straight line", () =>
     }
   }
 });
+
+test("mappings default to wall: floor compatibility unless given explicitly", async () => {
+  const { normalizeMapping, emptyMapping } = await import("../scripts/lib/mapping.js");
+  assert.deepEqual(emptyMapping("x").compatible, { wall: ["floor"] });
+  assert.deepEqual(normalizeMapping({ tiles: {} }).compatible, { wall: ["floor"] });
+  assert.deepEqual(normalizeMapping({ tiles: {}, compatible: {} }).compatible, {});
+  assert.deepEqual(normalizeMapping({ tiles: {}, compatible: { door: "floor" } }).compatible, { door: ["floor"] });
+});

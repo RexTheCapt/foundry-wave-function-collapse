@@ -6,7 +6,8 @@
  *   "description": "Optional text",
  *   "boundary": ["wall"],              // optional default boundary tags for the generator
  *   "restricted": ["door"],            // optional tags that may only appear on marked edges
- *   "compatible": { "wall": ["floor"] }, // optional: which differing tags may face each other
+ *   "compatible": { "wall": ["floor"] }, // which differing tags may face each other; this is the
+ *                                        // default when the key is missing, {} disables it
  *   "tiles": {
  *     "floor.png": {                   // file name, relative to the collection directory
  *       "tags": { "n": ["floor"], "e": [["floor"], ["wall"]], "s": ["floor"], "w": ["floor"] },
@@ -23,8 +24,11 @@ import { SIDES, normalizeTags, normalizeTile, sideTagsToText } from "./wfc.js";
 
 export const MAPPING_VERSION = 1;
 
+/** Compatible tags a new collection starts with: a wall side may face a floor side. */
+export const DEFAULT_COMPATIBLE = { wall: ["floor"] };
+
 export function emptyMapping(name = "") {
-  return { version: MAPPING_VERSION, name, description: "", boundary: [], restricted: [], compatible: {}, tiles: {} };
+  return { version: MAPPING_VERSION, name, description: "", boundary: [], restricted: [], compatible: { ...DEFAULT_COMPATIBLE }, tiles: {} };
 }
 
 export function emptyTileEntry() {
@@ -54,7 +58,8 @@ export function normalizeMapping(raw, fallbackName = "") {
   if (typeof raw.description === "string") mapping.description = raw.description;
   mapping.boundary = normalizeTags(raw.boundary);
   mapping.restricted = normalizeTags(raw.restricted);
-  mapping.compatible = normalizeCompatible(raw.compatible);
+  // A mapping without the key gets the default table; an explicit empty object means none.
+  mapping.compatible = raw.compatible === undefined ? { ...DEFAULT_COMPATIBLE } : normalizeCompatible(raw.compatible);
   const tiles = raw.tiles && typeof raw.tiles === "object" ? raw.tiles : {};
   for (const [file, entry] of Object.entries(tiles)) {
     if (!file || file.includes("/") || file.includes("\\")) continue;
