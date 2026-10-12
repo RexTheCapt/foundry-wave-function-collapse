@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed tiles being placed half a cell off on Foundry v14, where a tile's x and y are the position
+  of its texture anchor and the default anchor is the tile center. Placement now follows the
+  anchor default of the running version, so v12 and v13 are unchanged.
+
 ## 0.2.0
 
 - Regenerate part of a dungeon: tiles inside the outline are replaced while generated tiles next to

@@ -19,12 +19,33 @@ function generatedDocs(collection) {
   return collection.filter(d => d.flags?.[MODULE_ID]?.generation);
 }
 
+/**
+ * Default texture anchor of Tile documents. Foundry v12 and v13 anchor tiles at the top-left
+ * corner (0, 0) and v14 at the center (0.5, 0.5). A tile's x and y are the position of its anchor.
+ */
+export function tileAnchorDefaults() {
+  const read = name => {
+    const field = CONFIG.Tile?.documentClass?.schema?.fields?.texture?.fields?.[name];
+    const initial = typeof field?.initial === "function" ? field.initial() : field?.initial;
+    return Number.isFinite(initial) ? initial : 0;
+  };
+  return { x: read("anchorX"), y: read("anchorY") };
+}
+
+/** Top-left corner of a tile document, accounting for its texture anchor. */
+export function tileTopLeft(tile) {
+  const ax = tile.texture?.anchorX ?? 0;
+  const ay = tile.texture?.anchorY ?? 0;
+  return { x: tile.x - ax * tile.width, y: tile.y - ay * tile.height };
+}
+
 /** Grid cell of a generated 1x1 tile document, or null when it does not sit on the grid. */
 function tileCell(tile, size) {
   if (Math.abs(tile.width - size) > 1 || Math.abs(tile.height - size) > 1) return null;
-  const i = Math.round(tile.y / size);
-  const j = Math.round(tile.x / size);
-  if (Math.abs(tile.y - i * size) > 1 || Math.abs(tile.x - j * size) > 1) return null;
+  const { x, y } = tileTopLeft(tile);
+  const i = Math.round(y / size);
+  const j = Math.round(x / size);
+  if (Math.abs(y - i * size) > 1 || Math.abs(x - j * size) > 1) return null;
   return { i, j };
 }
 
@@ -203,10 +224,12 @@ export async function generateDungeon({
 
   const generationId = foundry.utils.randomID();
   const flags = { [MODULE_ID]: { generation: generationId } };
+  const anchor = tileAnchorDefaults();
+  log.debug(`tile anchor defaults for this Foundry version: (${anchor.x}, ${anchor.y})`);
   const tileDocs = result.assignments.map(({ cell, variant }) => ({
-    texture: { src: variant.tile.src },
-    x: cell.j * size,
-    y: cell.i * size,
+    texture: { src: variant.tile.src, anchorX: anchor.x, anchorY: anchor.y },
+    x: Math.round((cell.j + anchor.x) * size),
+    y: Math.round((cell.i + anchor.y) * size),
     width: size,
     height: size,
     rotation: variant.rotation,
@@ -250,8 +273,9 @@ export async function generateDungeon({
  */
 export async function clearGeneratedInCells(scene, cellSet, size) {
   const tiles = generatedDocs(scene.tiles.contents).filter(t => {
-    const i = Math.floor((t.y + t.height / 2) / size);
-    const j = Math.floor((t.x + t.width / 2) / size);
+    const { x, y } = tileTopLeft(t);
+    const i = Math.floor((y + t.height / 2) / size);
+    const j = Math.floor((x + t.width / 2) / size);
     return cellSet.has(cellKey(i, j));
   });
   const wallIds = [];
