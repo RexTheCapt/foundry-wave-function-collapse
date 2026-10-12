@@ -269,14 +269,15 @@ const cellKey = (i, j) => `${i},${j}`;
  *   must offer the feature, carry exactly the tags, or (for `any`) have that entry as its exact
  *   tag or as a door feature.
  * @param {string} [options.seed]
- * @param {number} [options.maxAttempts]  Restarts allowed on contradiction.
+ * @param {number} [options.maxAttempts]  Restarts allowed after a search exhausts its backtracking budget.
+ * @param {number} [options.maxBacktracks]  Backtracking steps allowed per attempt.
  * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null, failure: {stage: string, cell: object, from?: object}|null}}
  *   `failure.stage` is "constraints" when a cell has no variant satisfying its own constraints,
  *   "propagation" when the initial propagation emptied a cell (`from` is the neighbouring cell
  *   that forced it), "shared" when a shared edge requirement could not be met, or "collapse"
  *   when a random choice led to a dead end (which triggers a restart).
  */
-export function solve({ cells, variants, boundaryTags = null, compatible = null, constraints = null, shared = [], seed = "", maxAttempts = 20 }) {
+export function solve({ cells, variants, boundaryTags = null, compatible = null, constraints = null, shared = [], seed = "", maxAttempts = 5, maxBacktracks = 20000 }) {
   const V = variants.length;
   const N = cells.length;
   if (!V) throw new Error("No tile variants to solve with");
@@ -289,6 +290,25 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
   }));
 
   const compatTable = buildCompatibility(compatible);
+
+  // A shared tag requirement whose tags only ever match themselves means both sides must carry
+  // exactly those tags: enforce it on both cells up front instead of lazily.
+  const unaryShared = [];
+  const lazyShared = [];
+  for (const r of shared ?? []) {
+    const tags = r.tags ? normalizeTags(r.tags) : null;
+    const selfOnly = tags && !tags.includes(WILDCARD) && tags.every(t => !compatTable.explicit.has(t));
+    if (selfOnly) unaryShared.push(r); else lazyShared.push(r);
+  }
+  if (unaryShared.length) {
+    constraints = cells.map((c, k) => ({ ...(constraints?.[k] ?? {}) }));
+    for (const r of unaryShared) {
+      for (const [k, side] of [[r.a, r.sideA], [r.b, r.sideB]]) {
+        const existing = constraints[k][side]?.require;
+        constraints[k][side] = { ...constraints[k][side], require: existing ? normalizeTags([...normalizeTags(existing), ...normalizeTags(r.tags)]) : normalizeTags(r.tags) };
+      }
+    }
+  }
 
   // compat[s][a * V + b] === 1 when variant a may have variant b on its side SIDES[s]
   const compat = SIDES.map(side => {
@@ -334,7 +354,7 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
   }));
 
   // Binary "at least one side offers the feature / carries the tags" requirements, as masks.
-  const sharedMasks = (shared ?? []).map(r => {
+  const sharedMasks = lazyShared.map(r => {
     const test = (v, side) => {
       if (r.feature) return (v.features?.[side] ?? []).includes(r.feature);
       if (r.tags) return tagsMatch(v.tags[side], normalizeTags(r.tags));
@@ -344,6 +364,7 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
     return {
       a: r.a,
       b: r.b,
+      sideIndex: SIDES.indexOf(r.sideA),
       maskA: Uint8Array.from(variants, v => (test(v, r.sideA) ? 1 : 0)),
       maskB: Uint8Array.from(variants, v => (test(v, r.sideB) ? 1 : 0))
     };
@@ -355,7 +376,7 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
   let last = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const rng = mulberry32(hashSeed(`${seed}#${attempt}`));
-    last = attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared: sharedMasks, weights, weightLog, rng });
+    last = attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared: sharedMasks, weights, weightLog, rng, maxBacktracks });
     if (last.success) return { ...last, attempts: attempt + 1, failure: null };
     // A failure before any random choice is deterministic: retrying cannot help.
     if (last.failure.stage !== "collapse") return { ...last, attempts: attempt + 1 };
@@ -401,11 +422,34 @@ export function describeCellConstraints(cellConstraints, variants, compatible = 
   return lines;
 }
 
-function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared, weights, weightLog, rng }) {
+function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared, weights, weightLog, rng, maxBacktracks }) {
   const domains = Array.from({ length: N }, () => new Uint8Array(V).fill(1));
   const counts = new Int32Array(N).fill(V);
   const inQueue = new Uint8Array(N);
   const stack = [];
+  // Every removal is recorded so a failed choice can be undone.
+  const trail = [];
+  // Cells whose domain changed since the shared edge requirements were last checked.
+  const dirty = new Uint8Array(N);
+  const dirtyList = [];
+  const remove = (k, a) => {
+    domains[k][a] = 0;
+    counts[k]--;
+    trail.push(k * V + a);
+    if (!dirty[k]) { dirty[k] = 1; dirtyList.push(k); }
+  };
+  const undoTo = mark => {
+    while (trail.length > mark) {
+      const t = trail.pop();
+      const k = (t / V) | 0;
+      domains[k][t - k * V] = 1;
+      counts[k]++;
+    }
+    for (const k of stack) inQueue[k] = 0;
+    stack.length = 0;
+    for (const k of dirtyList) dirty[k] = 0;
+    dirtyList.length = 0;
+  };
 
   // Apply per-side constraints and seed the propagation queue with every cell.
   for (let k = 0; k < N; k++) {
@@ -413,28 +457,48 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
     for (let s = 0; s < 5; s++) {
       const ok = allowedMasks[k][s];
       if (!ok) continue;
-      for (let a = 0; a < V; a++) {
-        if (d[a] && !ok[a]) { d[a] = 0; counts[k]--; }
-      }
+      for (let a = 0; a < V; a++) if (d[a] && !ok[a]) remove(k, a);
     }
     if (counts[k] === 0) return { success: false, assignments: [], failedCell: cells[k], failure: { stage: "constraints", cell: cells[k] } };
     inQueue[k] = 1;
     stack.push(k);
+    if (!dirty[k]) { dirty[k] = 1; dirtyList.push(k); }
   }
 
-  const restrictTo = (cell, mask) => {
-    const d = domains[cell];
-    let changed = false;
-    for (let a = 0; a < V; a++) {
-      if (d[a] && !mask[a]) { d[a] = 0; counts[cell]--; changed = true; }
+  /**
+   * Enforce one shared edge requirement as a binary constraint: a variant x of cell a survives
+   * when it satisfies the requirement itself, or when some still-possible variant y of cell b
+   * satisfies it and may sit next to x. Likewise for b. Returns true when both domains stay
+   * non-empty.
+   */
+  const enforceShared = r => {
+    const da = domains[r.a];
+    const db = domains[r.b];
+    const m = compat[r.sideIndex];
+    let changedA = false;
+    for (let x = 0; x < V; x++) {
+      if (!da[x] || r.maskA[x]) continue;
+      let supported = false;
+      const row = x * V;
+      for (let y = 0; y < V; y++) {
+        if (db[y] && r.maskB[y] && m[row + y]) { supported = true; break; }
+      }
+      if (!supported) { remove(r.a, x); changedA = true; }
     }
-    if (changed && !inQueue[cell]) { inQueue[cell] = 1; stack.push(cell); }
-    return counts[cell] > 0;
-  };
-  const canOffer = (cell, mask) => {
-    const d = domains[cell];
-    for (let a = 0; a < V; a++) if (d[a] && mask[a]) return true;
-    return false;
+    if (counts[r.a] === 0) return false;
+    let changedB = false;
+    for (let y = 0; y < V; y++) {
+      if (!db[y] || r.maskB[y]) continue;
+      let supported = false;
+      for (let x = 0; x < V; x++) {
+        if (da[x] && r.maskA[x] && m[x * V + y]) { supported = true; break; }
+      }
+      if (!supported) { remove(r.b, y); changedB = true; }
+    }
+    if (counts[r.b] === 0) return false;
+    if (changedA && !inQueue[r.a]) { inQueue[r.a] = 1; stack.push(r.a); }
+    if (changedB && !inQueue[r.b]) { inQueue[r.b] = 1; stack.push(r.b); }
+    return true;
   };
 
   const propagate = () => {
@@ -457,21 +521,24 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
           const dn = domains[n];
           let changed = false;
           for (let b = 0; b < V; b++) {
-            if (dn[b] && !allowed[b]) { dn[b] = 0; counts[n]--; changed = true; }
+            if (dn[b] && !allowed[b]) { remove(n, b); changed = true; }
           }
           if (counts[n] === 0) return { cell: n, from: k, stage: "propagation" };
           if (changed && !inQueue[n]) { inQueue[n] = 1; stack.push(n); }
         }
       }
-      // Shared edge requirements: when one side can no longer satisfy it, the other must.
+      // Shared edge requirements touching a cell that changed since the last check.
+      if (!dirtyList.length) return null;
+      const round = dirtyList.splice(0);
       for (const r of shared) {
-        const aCan = canOffer(r.a, r.maskA);
-        const bCan = canOffer(r.b, r.maskB);
-        if (!aCan && !bCan) return { cell: r.a, from: r.b, stage: "shared" };
-        if (!aCan && !restrictTo(r.b, r.maskB)) return { cell: r.b, from: r.a, stage: "shared" };
-        if (!bCan && !restrictTo(r.a, r.maskA)) return { cell: r.a, from: r.b, stage: "shared" };
+        if (!dirty[r.a] && !dirty[r.b]) continue;
+        if (!enforceShared(r)) {
+          for (const k of round) dirty[k] = 0;
+          return { cell: counts[r.a] === 0 ? r.a : r.b, from: counts[r.a] === 0 ? r.b : r.a, stage: "shared" };
+        }
       }
-      if (!stack.length) return null;
+      for (const k of round) dirty[k] = 0;
+      if (!stack.length && !dirtyList.length) return null;
     }
   };
 
@@ -482,11 +549,11 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
     failure: { stage, cell: cells[info.cell], from: info.from === undefined ? undefined : cells[info.from] }
   });
 
-  let failed = propagate();
-  if (failed) return fail(failed);
+  const initial = propagate();
+  if (initial) return fail(initial);
 
-  for (;;) {
-    // Pick the cell with the lowest weighted entropy among unresolved cells.
+  // Pick the unresolved cell with the lowest weighted entropy, or -1 when all are resolved.
+  const pickCell = () => {
     let best = -1;
     let bestEntropy = Infinity;
     for (let k = 0; k < N; k++) {
@@ -502,27 +569,47 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
       const entropy = Math.log(sumW) - sumWL / sumW + rng() * 1e-6;
       if (entropy < bestEntropy) { bestEntropy = entropy; best = k; }
     }
-    if (best < 0) break;
+    return best;
+  };
 
-    // Collapse it to a single variant chosen by weight.
-    const d = domains[best];
-    let total = 0;
-    for (let a = 0; a < V; a++) if (d[a]) total += weights[a];
-    let pick = rng() * total;
-    let chosen = -1;
-    for (let a = 0; a < V; a++) {
-      if (!d[a]) continue;
-      pick -= weights[a];
-      chosen = a;
-      if (pick <= 0) break;
+  // Candidate order for a cell: weighted random order without replacement.
+  const orderCandidates = k => {
+    const d = domains[k];
+    const keyed = [];
+    for (let a = 0; a < V; a++) if (d[a]) keyed.push([Math.pow(rng(), 1 / weights[a]), a]);
+    keyed.sort((x, y) => y[0] - x[0]);
+    return keyed.map(x => x[1]);
+  };
+
+  // Depth-first search with backtracking.
+  const decisions = [];
+  let backtracks = 0;
+  let lastFailure = null;
+  for (;;) {
+    const k = pickCell();
+    if (k < 0) break;
+    decisions.push({ cell: k, mark: trail.length, candidates: orderCandidates(k), index: 0 });
+    let placed = false;
+    while (decisions.length && !placed) {
+      const dec = decisions[decisions.length - 1];
+      undoTo(dec.mark);
+      if (dec.index >= dec.candidates.length) {
+        decisions.pop();
+        if (++backtracks > maxBacktracks) {
+          return { ...fail(lastFailure ?? { cell: dec.cell }, "collapse"), backtracks };
+        }
+        continue;
+      }
+      const chosen = dec.candidates[dec.index++];
+      const d = domains[dec.cell];
+      for (let a = 0; a < V; a++) if (d[a] && a !== chosen) remove(dec.cell, a);
+      inQueue[dec.cell] = 1;
+      stack.push(dec.cell);
+      const failed = propagate();
+      if (failed) { lastFailure = failed; backtracks++; if (backtracks > maxBacktracks) return { ...fail(failed, "collapse"), backtracks }; continue; }
+      placed = true;
     }
-    d.fill(0);
-    d[chosen] = 1;
-    counts[best] = 1;
-    inQueue[best] = 1;
-    stack.push(best);
-    failed = propagate();
-    if (failed) return fail(failed, "collapse");
+    if (!placed) return { ...fail(lastFailure ?? { cell: 0 }, "collapse"), backtracks };
   }
 
   const assignments = [];
@@ -531,5 +618,5 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
     const variantIndex = d.indexOf(1);
     assignments.push({ cell: cells[k], variant: variants[variantIndex], variantIndex });
   }
-  return { success: true, assignments, failedCell: null };
+  return { success: true, assignments, failedCell: null, backtracks };
 }

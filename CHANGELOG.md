@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4
+
+- Solver rewritten as a backtracking search: dead ends are undone instead of restarting the whole
+  generation, so outlines with many markers no longer fail with "no valid arrangement after 20
+  attempts".
+- Edge marker requirements are propagated as proper two-cell constraints, so "wall on one of the
+  two tiles" prunes both tiles immediately. A wall-marker line of any length now solves without a
+  single backtrack.
+- Side-tag markers whose tags only match themselves are enforced on both tiles up front.
+
 ## 0.4.3
 
 - Fixed a contradiction when regenerating next to existing tiles: the boundary tag was also applied

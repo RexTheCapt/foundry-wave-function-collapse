@@ -293,3 +293,46 @@ test("boundary tags do not apply to sides that face an existing tile", () => {
   assert.ok(lines.some(l => l.startsWith("north must be exactly [wall]")));
   assert.ok(!lines.some(l => l.startsWith("west must be exactly")));
 });
+
+test("markers along a line are solved with backtracking", () => {
+  // 10x10 region, a vertical line of ten edge markers requiring "wall" tags between columns 4 and 5,
+  // plus ten door-feature markers between columns 7 and 8, doors only where marked, closed boundary.
+  const cells = cellsInPolygon([[0, 0], [1000, 0], [1000, 1000], [0, 1000]], 100);
+  const index = new Map(cells.map((c, k) => [`${c.i},${c.j}`, k]));
+  const variants = expandVariants(sampleTiles);
+  const shared = [];
+  for (let i = 0; i < 10; i++) {
+    shared.push({ a: index.get(`${i},4`), sideA: "e", b: index.get(`${i},5`), sideB: "w", tags: ["wall"] });
+    shared.push({ a: index.get(`${i},7`), sideA: "e", b: index.get(`${i},8`), sideB: "w", feature: "door" });
+  }
+  const constraints = cells.map(c => {
+    const r = {};
+    for (const side of SIDES) r[side] = { forbid: ["door"], forbidFeatures: ["door"] };
+    r.c = { forbidFeatures: ["door"] };
+    if (c.j === 7) r.e = {};
+    if (c.j === 8) r.w = {};
+    return r;
+  });
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const r = sampleSolve({ cells, variants, boundaryTags: ["wall"], constraints, shared, seed });
+    assert.ok(r.success, `seed ${seed}: ${r.failure?.stage}`);
+    assertConsistent(r, cells);
+    for (let i = 0; i < 10; i++) {
+      assert.deepEqual(r.assignments[index.get(`${i},4`)].variant.tags.e, ["wall"]);
+      const left = r.assignments[index.get(`${i},7`)].variant;
+      const right = r.assignments[index.get(`${i},8`)].variant;
+      assert.ok(left.features.e.includes("door") || right.features.w.includes("door"), `row ${i} door`);
+    }
+  }
+});
+
+test("backtracking budget produces a collapse failure instead of hanging", () => {
+  // Every cell demands a door on its east side; the tile east of it must then show a door on its
+  // west, which no sample tile combines with a door on its own east. Unsatisfiable, found by search.
+  const cells = cellsInPolygon([[0, 0], [300, 0], [300, 100], [0, 100]], 100);
+  const variants = expandVariants(sampleTiles);
+  const constraints = cells.map(() => ({ e: { requireFeatures: ["door"] }, w: { requireFeatures: ["door"] } }));
+  const r = sampleSolve({ cells, variants, constraints, seed: 1, maxAttempts: 2, maxBacktracks: 50 });
+  assert.equal(r.success, false);
+  assert.ok(["constraints", "propagation", "shared", "collapse"].includes(r.failure.stage));
+});
