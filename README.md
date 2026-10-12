@@ -88,9 +88,10 @@ outside, and walls on the shared border are kept in the pool so doors in neighbo
 
 Select **Door and edge markers (WFC)** in the Tiles controls.
 
-- Click near a cell edge to place an **edge marker**. It can require side tags on that edge (one of
-  the two tiles must have exactly those tags there, the other must be compatible) and door features (`door` or `secret`): at least one of
-  the two tiles must draw that kind of door on the edge.
+- Click near a cell edge to place an **edge marker** and type what must be there, comma separated.
+  A door type (`door`, `secret`) must be drawn on that edge by one of the two tiles; any other entry
+  is a side tag (for example `wall`) that one of the two tiles must carry exactly there, the other
+  being kept compatible by the normal adjacency rules.
 - Click the center of a cell to place a **cell marker** that requires a door drawn inside the tile,
   for example a door across a corridor.
 - Shift-click repeats the last marker, right-click removes one. Markers are saved with the scene and
@@ -231,9 +232,16 @@ You can edit the file by hand; the collection editor reloads it from disk.
 
 ## Sample collection
 
-`collections/sample-dungeon` ships with thirty generated stone tiles (ten shapes with their
-rotations baked in) using one-sided walls, the tags `wall`, `door` and the `floor-*` family with
-corner markers, a compatibility table, and a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
+`collections/sample-dungeon` ships with fifty-nine generated tiles (rotations baked in): ten stone
+shapes using one-sided walls, the tags `wall`, `door` and the `floor-*` family with corner
+markers, a compatibility table, a door across the middle of a corridor, and ten water shapes.
+
+The water shapes show how to tag edges by what touches them: a puddle in the middle (plain floor
+edges), streams from the middle out to one, two, three or four edges (`water-mid` on those edges),
+a flooded tile (`water` on every edge), water on one half (`water` on the flooded edge, `water-e`
+or `water-w` on the edges it half covers), water in one corner (`water-e` and `water-n` style half
+edges) and its inverse with floor in one corner. Edges with the same profile connect, so pools and
+streams always continue cleanly. It is registered by default and is a good template for your own art. Regenerate it with
 `npm run sample-tiles`.
 
 ## API

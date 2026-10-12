@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+
+- Edge markers use a single text box again: door types become door features, other entries side
+  tags.
+- Sample collection gains ten water shapes (29 tiles with rotations): puddle, streams to one, two,
+  three or four edges, flooded, half, corner and inverse corner. Edge tags are derived from the
+  drawn water so profiles always connect.
+
 ## 0.9.0
 
 - Collections can declare incompatible tags (`door: wall, door`): listed pairs never face each
