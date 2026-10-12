@@ -39,3 +39,7 @@
 .wfc-check-row { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .wfc-check-row input { flex: 0 0 auto; margin: 0; }
 .wfc-check-label { display: flex; gap: 0.5rem; align-items: baseline; }
+
+/* Each template part renders one root element; make it lay out like the form it sits in. */
+.wfc-app .wfc-part { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-height: 0; }
+.wfc-collection-editor .wfc-part { height: 100%; }

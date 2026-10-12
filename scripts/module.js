@@ -1,5 +1,6 @@
 import { MODULE_ID, SAMPLE_COLLECTION, TOOL_OUTLINE, TOOL_FROM_DRAWING, TOOL_COLLECTIONS, TOOL_CLEAR } from "./constants.js";
 import { OutlineTool } from "./outline-tool.js";
+import { log } from "./log.js";
 import { assertSquareGrid, clearGenerated, generateDungeon } from "./generator.js";
 import { getRegisteredDirs, loadCollections } from "./collections.js";
 import { cellsInPolygon, drawingToPolygon } from "./lib/geometry.js";
@@ -44,6 +45,14 @@ function registerSettings() {
     type: String,
     default: ""
   });
+  game.settings.register(MODULE_ID, "debug", {
+    name: "WFC.Settings.Debug.Name",
+    hint: "WFC.Settings.Debug.Hint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true
+  });
   game.settings.register(MODULE_ID, "lastSelection", {
     scope: "client",
     config: false,
@@ -78,31 +87,40 @@ function registerSettings() {
 
 /** Ask which collections to use, then generate for each polygon. */
 async function generateForPolygons(polygons) {
+  log.debug("generateForPolygons", { polygons });
   try {
     assertSquareGrid();
   } catch (err) {
+    log.warn("cannot generate:", err.message);
     ui.notifications.error(err.message);
     return;
   }
   const size = canvas.grid.size;
   const cellCount = polygons.reduce((n, p) => n + cellsInPolygon(p, size).length, 0);
+  log.debug(`grid size ${size}, ${cellCount} cells inside ${polygons.length} polygon(s)`);
   if (!cellCount) {
     ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCells"));
     return;
   }
-  const collections = (await loadCollections(getRegisteredDirs())).filter(c => Object.keys(c.mapping.tiles).length);
+  const registered = getRegisteredDirs();
+  const loaded = await loadCollections(registered);
+  log.debug("registered collections", registered, loaded.map(c => ({ dir: c.dir, name: c.name, tiles: Object.keys(c.mapping.tiles).length, hasMapping: c.hasMapping, error: c.error })));
+  const collections = loaded.filter(c => Object.keys(c.mapping.tiles).length);
   if (!collections.length) {
+    log.warn("no usable collections");
     ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCollections"));
     CollectionsApp.open();
     return;
   }
+  log.debug("opening generate dialog");
   const options = await GenerateDialog.show({ collections, cellCount });
+  log.debug("generate dialog result", options);
   if (!options) return;
   for (const polygon of polygons) {
     try {
       await generateDungeon({ polygon, ...options });
     } catch (err) {
-      console.error(`${MODULE_ID} | generation failed`, err);
+      log.error("generation failed", err);
       ui.notifications.error(err.message);
     }
   }
@@ -110,6 +128,7 @@ async function generateForPolygons(polygons) {
 
 async function generateFromDrawings() {
   const docs = (canvas.drawings?.controlled ?? []).map(d => d.document);
+  log.debug("generateFromDrawings: controlled drawings", docs.map(d => ({ id: d.id, type: d.shape?.type, x: d.x, y: d.y, rotation: d.rotation })));
   const polygons = docs.map(drawingToPolygon).filter(p => p && p.length >= 3);
   if (!polygons.length) {
     ui.notifications.warn(game.i18n.localize("WFC.Errors.NoDrawing"));
@@ -119,6 +138,7 @@ async function generateFromDrawings() {
 }
 
 async function clearDialog() {
+  log.debug("clearDialog");
   try {
     assertSquareGrid();
   } catch (err) {
@@ -153,46 +173,76 @@ function getActiveTool() {
 }
 
 function syncOutlineTool() {
-  const active = canvas?.ready && getActiveControl() === "tiles" && getActiveTool() === TOOL_OUTLINE;
+  const control = getActiveControl();
+  const tool = getActiveTool();
+  const active = canvas?.ready && control === "tiles" && tool === TOOL_OUTLINE;
+  log.debug(`syncOutlineTool: control=${control} tool=${tool} canvasReady=${canvas?.ready} -> ${active ? "activate" : "deactivate"}`);
   if (active) outlineTool.activate();
   else outlineTool.deactivate();
 }
 
 function registerControls(controls) {
   if (!game.user.isGM) return;
-  const defs = [
+  const tileTools = [
     { name: TOOL_OUTLINE, title: "WFC.Tools.Outline", icon: "fa-solid fa-draw-polygon" },
-    { name: TOOL_FROM_DRAWING, title: "WFC.Tools.FromDrawing", icon: "fa-solid fa-vector-square", button: true, handler: generateFromDrawings },
     { name: TOOL_COLLECTIONS, title: "WFC.Tools.Collections", icon: "fa-solid fa-layer-group", button: true, handler: () => CollectionsApp.open() },
     { name: TOOL_CLEAR, title: "WFC.Tools.Clear", icon: "fa-solid fa-eraser", button: true, handler: clearDialog }
   ];
+  // Lives in the Drawings group so the drawing selection is still intact when it is clicked.
+  const drawingTools = [
+    { name: TOOL_FROM_DRAWING, title: "WFC.Tools.FromDrawing", icon: "fa-solid fa-dungeon", button: true, handler: generateFromDrawings }
+  ];
 
   if (Array.isArray(controls)) {
-    // Foundry v12: array of controls, array of tools.
-    const tiles = controls.find(c => c.name === "tiles");
-    if (!tiles) return;
-    for (const def of defs) {
-      const tool = { name: def.name, title: def.title, icon: def.icon, visible: true };
-      if (def.button) { tool.button = true; tool.onClick = def.handler; }
-      tiles.tools.push(tool);
-    }
+    // Foundry v12: array of controls, array of tools. Tool changes re-render the controls,
+    // so the renderSceneControls hook keeps the outline tool in sync.
+    log.debug("registering scene controls (v12 array API)");
+    const add = (controlName, defs) => {
+      const control = controls.find(c => c.name === controlName);
+      if (!control) { log.warn(`control group "${controlName}" not found`); return; }
+      for (const def of defs) {
+        const tool = { name: def.name, title: def.title, icon: def.icon, visible: true };
+        if (def.button) { tool.button = true; tool.onClick = def.handler; }
+        control.tools.push(tool);
+      }
+    };
+    add("tiles", tileTools);
+    add("drawings", drawingTools);
     return;
   }
 
-  // Foundry v13+: record of controls, record of tools with an explicit order.
-  const tiles = controls.tiles;
-  if (!tiles) return;
-  let order = Object.values(tiles.tools).reduce((max, t) => Math.max(max, t.order ?? 0), 0);
-  for (const def of defs) {
-    const tool = { name: def.name, title: def.title, icon: def.icon, visible: true, order: ++order };
-    if (def.button) {
-      tool.button = true;
-      tool.onChange = () => def.handler();
-    } else {
-      tool.onChange = () => syncOutlineTool();
+  // Foundry v13+: record of controls, record of tools with an explicit order. Activating a tool
+  // does not re-render the controls, so the tool's own onChange callback drives activation.
+  log.debug("registering scene controls (v13+ record API); groups:", Object.keys(controls));
+  const add = (controlName, defs) => {
+    const control = controls[controlName];
+    if (!control) { log.warn(`control group "${controlName}" not found`); return; }
+    let order = Object.values(control.tools ?? {}).reduce((max, t) => Math.max(max, t.order ?? 0), 0);
+    for (const def of defs) {
+      const tool = { name: def.name, title: def.title, icon: def.icon, visible: true, order: ++order };
+      if (def.button) {
+        tool.button = true;
+        tool.onChange = event => {
+          log.debug(`button "${def.name}" clicked`);
+          def.handler(event);
+        };
+      } else {
+        // v14 flags: this tool neither selects nor creates placeables.
+        tool.interaction = false;
+        tool.control = false;
+        tool.creation = false;
+        tool.onChange = (event, active) => {
+          log.debug(`tool "${def.name}" onChange active=${active}`);
+          if (active) outlineTool.activate();
+          else outlineTool.deactivate();
+        };
+      }
+      control.tools[def.name] = tool;
+      log.debug(`added tool "${def.name}" to "${controlName}" (order ${tool.order})`);
     }
-    tiles.tools[def.name] = tool;
-  }
+  };
+  add("tiles", tileTools);
+  add("drawings", drawingTools);
 }
 
 /* -------------------------------------------- */
@@ -201,7 +251,7 @@ function registerControls(controls) {
 
 Hooks.once("init", () => {
   registerSettings();
-  console.log(`${MODULE_ID} | initialized`);
+  log.info(`initialized (Foundry ${game.version}, module ${game.modules.get(MODULE_ID)?.version})`);
 });
 
 Hooks.once("ready", () => {
@@ -214,9 +264,12 @@ Hooks.once("ready", () => {
     wfc,
     geometry
   };
+  log.debug("ready; registered collection directories:", getRegisteredDirs());
 });
 
 Hooks.on("getSceneControlButtons", registerControls);
 Hooks.on("renderSceneControls", syncOutlineTool);
 Hooks.on("canvasReady", syncOutlineTool);
-Hooks.on("canvasTearDown", () => outlineTool.deactivate());
+Hooks.on("activateTilesLayer", () => { log.debug("activateTilesLayer"); syncOutlineTool(); });
+Hooks.on("deactivateTilesLayer", () => { log.debug("deactivateTilesLayer"); outlineTool.deactivate(); });
+Hooks.on("canvasTearDown", () => { log.debug("canvasTearDown"); outlineTool.deactivate(); });

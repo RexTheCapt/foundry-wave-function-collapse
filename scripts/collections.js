@@ -8,6 +8,7 @@
 import { MODULE_ID, MAPPING_FILE, IMAGE_EXTENSIONS } from "./constants.js";
 import { emptyMapping, normalizeMapping } from "./lib/mapping.js";
 import { normalizeTile } from "./lib/wfc.js";
+import { log } from "./log.js";
 
 /** FilePicker class that works on v12 (global) and v13+ (namespaced). */
 export function getFilePicker() {
@@ -78,6 +79,7 @@ export async function loadCollection(dir) {
     result.error = err.message;
   }
   result.name = result.mapping.name || fallbackName;
+  log.debug(`loaded collection ${dir}`, { name: result.name, hasMapping: result.hasMapping, tiles: Object.keys(result.mapping.tiles).length, error: result.error });
   return result;
 }
 
@@ -106,7 +108,9 @@ export async function saveMapping(dir, mapping) {
   const FP = getFilePicker();
   const normalized = normalizeMapping(mapping, basename(dir));
   const file = new File([JSON.stringify(normalized, null, 2)], MAPPING_FILE, { type: "application/json" });
+  log.debug(`saving ${MAPPING_FILE} to ${dir}`);
   const response = await FP.upload("data", dir, file, {}, { notify: false });
+  log.debug("upload response", response);
   if (!response || response.status === "error" || response.error) {
     throw new Error(response?.error ?? response?.message ?? "upload failed");
   }
@@ -118,6 +122,7 @@ export async function createCollection(name) {
   const root = cleanDir(game.settings.get(MODULE_ID, "collectionsRoot"));
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "collection";
   const dir = `${root}/${slug}`;
+  log.debug(`creating collection "${name}" at ${dir}`);
   await ensureDirectory(dir);
   const mapping = emptyMapping(name.trim());
   await saveMapping(dir, mapping);

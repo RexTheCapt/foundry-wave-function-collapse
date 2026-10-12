@@ -6,6 +6,7 @@
  */
 
 import { cellsInPolygon } from "./lib/geometry.js";
+import { log } from "./log.js";
 
 export class OutlineTool {
   /** @param {{onFinish: (polygon: number[][]) => Promise<void>}} options */
@@ -26,7 +27,8 @@ export class OutlineTool {
   }
 
   activate() {
-    if (this.active || !canvas.ready) return;
+    if (this.active) { log.debug("outline tool already active"); return; }
+    if (!canvas.ready) { log.warn("outline tool: canvas not ready, cannot activate"); return; }
     this.active = true;
     this.graphics = new PIXI.Graphics();
     this.graphics.zIndex = 10000;
@@ -36,11 +38,13 @@ export class OutlineTool {
     view.addEventListener("pointerdown", this._onPointerDown);
     view.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("keydown", this._onKeyDown, { capture: true });
+    log.debug("outline tool activated; listening on", view, "graphics parent:", parent?.constructor?.name);
     ui.notifications.info(game.i18n.localize("WFC.Tools.OutlineHint"));
   }
 
   deactivate() {
     if (!this.active) return;
+    log.debug("outline tool deactivated");
     this.active = false;
     const view = this.view;
     view?.removeEventListener("pointerdown", this._onPointerDown);
@@ -83,6 +87,7 @@ export class OutlineTool {
     if (this.busy) return;
     if (event.button === 2) {
       if (this.points.length) {
+        log.debug("outline: undo vertex");
         this.points.pop();
         this.#draw();
         event.preventDefault();
@@ -91,14 +96,17 @@ export class OutlineTool {
       return;
     }
     if (event.button !== 0) return;
-    const point = this.#snap(this.#toCanvas(event));
+    const raw = this.#toCanvas(event);
+    const point = this.#snap(raw);
     if (this.points.length >= 3 && this.#isFirst(point)) {
+      log.debug("outline: clicked first vertex, finishing");
       void this.finish();
       return;
     }
     const last = this.points[this.points.length - 1];
     if (last && last.x === point.x && last.y === point.y) return;
     this.points.push(point);
+    log.debug(`outline: vertex ${this.points.length} at (${point.x}, ${point.y}) from client (${event.clientX}, ${event.clientY}) canvas (${Math.round(raw.x)}, ${Math.round(raw.y)})`);
     this.#draw();
   }
 
@@ -113,10 +121,12 @@ export class OutlineTool {
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target?.isContentEditable) return;
     if (this.busy) return;
     if (event.key === "Escape" && this.points.length) {
+      log.debug("outline: escape, clearing");
       this.reset();
       event.stopPropagation();
       event.preventDefault();
     } else if (event.key === "Enter" && this.points.length) {
+      log.debug("outline: enter pressed, finishing");
       void this.finish();
       event.stopPropagation();
       event.preventDefault();
@@ -125,15 +135,20 @@ export class OutlineTool {
 
   async finish() {
     if (this.points.length < 3) {
+      log.debug("outline: finish requested with fewer than three points");
       ui.notifications.warn(game.i18n.localize("WFC.Errors.NeedThreePoints"));
       return;
     }
     const polygon = this.points.map(p => [p.x, p.y]);
+    log.debug("outline: finished polygon", polygon);
     this.busy = true;
     this.cursor = null;
     this.#draw(true);
     try {
       await this.onFinish(polygon);
+    } catch (err) {
+      log.error("outline: onFinish failed", err);
+      ui.notifications.error(err.message);
     } finally {
       if (this.active) this.reset();
     }

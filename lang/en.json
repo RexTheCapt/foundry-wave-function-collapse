@@ -16,6 +16,10 @@
         "Name": "Wall editor snap divisions",
         "Hint": "How many segments each tile side is divided into when drawing walls in the tile editor."
       },
+      "Debug": {
+        "Name": "Debug logging",
+        "Hint": "Write detailed troubleshooting messages to the browser console (F12)."
+      },
       "CollectionsMenu": {
         "Name": "Tile collections",
         "Label": "Manage collections",

@@ -1,6 +1,6 @@
 {
   "name": "foundry-wave-function-collapse",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Wave function collapse dungeon generator module for Foundry VTT",

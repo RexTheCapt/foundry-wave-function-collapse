@@ -27,7 +27,7 @@ In Foundry's **Add-on Modules** tab choose **Install Module** and paste this man
 https://github.com/RexTheCapt/foundry-wave-function-collapse/releases/latest/download/module.json
 ```
 
-Requires Foundry VTT v12 or v13 and a scene with a **square grid**.
+Requires Foundry VTT v12 to v14 and a scene with a **square grid**.
 
 ## Usage
 
@@ -38,8 +38,8 @@ Requires Foundry VTT v12 or v13 and a scene with a **square grid**.
 3. Click on grid points to add vertices. Right-click removes the last vertex, Escape clears.
 4. Click the first vertex again (or press Enter) to close the outline.
 
-Alternatively draw a rectangle, polygon, ellipse or circle with the regular Drawing tools, select
-it and click **Generate dungeon from selected drawings (WFC)**.
+Alternatively draw a rectangle, polygon, ellipse or circle with the regular Drawing tools, keep it
+selected and click **Generate dungeon from selected drawings (WFC)** in the **Drawings** controls.
 
 Every grid cell whose center lies inside the outline receives a tile. The outline itself becomes
 walls along the cell edges that face outside.
@@ -146,6 +146,13 @@ await api.generateDungeon({
   seed: "my-seed"
 });
 ```
+
+## Troubleshooting
+
+The **Debug logging** setting (on by default) writes detailed messages prefixed with
+`wave-function-collapse |` to the browser console (F12). They show when tools activate, every
+outline vertex, which collections were loaded, the solver result and the documents created. Include
+them when reporting an issue.
 
 ## Development
 

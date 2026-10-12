@@ -6,6 +6,7 @@ import { MODULE_ID } from "./constants.js";
 import { cellsInPolygon, outlineWalls, tileWallsForCell, mergeWalls, pointInPolygon, pointInOrOnPolygon } from "./lib/geometry.js";
 import { expandVariants, solve } from "./lib/wfc.js";
 import { collectionTiles, loadCollections } from "./collections.js";
+import { log } from "./log.js";
 
 export function assertSquareGrid() {
   if (!canvas.ready || !canvas.scene) throw new Error(game.i18n.localize("WFC.Errors.NoScene"));
@@ -44,6 +45,7 @@ export async function generateDungeon({
   const scene = canvas.scene;
   const size = canvas.grid.size;
   const cells = cellsInPolygon(polygon, size);
+  log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, gridSize: size });
   if (!cells.length) {
     ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCells"));
     return null;
@@ -56,7 +58,10 @@ export async function generateDungeon({
     return null;
   }
   const variants = expandVariants(tiles);
+  log.debug(`${tiles.length} tiles expanded to ${variants.length} variants`);
+  const started = performance.now();
   const result = solve({ cells, variants, boundaryTags, seed: String(seed) });
+  log.debug(`solve finished in ${Math.round(performance.now() - started)} ms`, { success: result.success, attempts: result.attempts, failedCell: result.failedCell });
   if (!result.success) {
     const cell = result.failedCell;
     ui.notifications.error(game.i18n.format("WFC.Generate.Failed", {
@@ -89,7 +94,11 @@ export async function generateDungeon({
     flags
   }));
 
-  if (clearExisting) await clearGeneratedInPolygon(polygon);
+  if (clearExisting) {
+    const removed = await clearGeneratedInPolygon(polygon);
+    log.debug("cleared previous generation inside polygon", removed);
+  }
+  log.debug(`creating ${tileDocs.length} tiles and ${wallDocs.length} walls (generation ${generationId})`);
   if (tileDocs.length) await scene.createEmbeddedDocuments("Tile", tileDocs);
   if (wallDocs.length) await scene.createEmbeddedDocuments("Wall", wallDocs);
   await game.settings.set(MODULE_ID, "lastGeneration", generationId);
@@ -123,6 +132,7 @@ export async function clearGenerated(mode = "last") {
   };
   const tiles = scene.tiles.contents.filter(match);
   const walls = scene.walls.contents.filter(match);
+  log.debug(`clearGenerated(${mode}): last generation ${last || "none"}, removing ${tiles.length} tiles and ${walls.length} walls`);
   const result = await deleteDocs(scene, tiles, walls);
   if (result.tiles + result.walls === 0) ui.notifications.info(game.i18n.localize("WFC.Clear.Nothing"));
   else ui.notifications.info(game.i18n.format("WFC.Clear.Done", result));

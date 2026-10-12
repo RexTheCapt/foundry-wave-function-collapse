@@ -2,13 +2,13 @@
   "id": "wave-function-collapse",
   "title": "Wave Function Collapse Dungeons",
   "description": "Procedurally generate dungeons from tagged tile collections. Draw an outline on the canvas, pick which tile collections to use, and the module fills it with matching tiles and walls using wave function collapse.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "authors": [
     { "name": "RexTheCapt", "url": "https://github.com/RexTheCapt" }
   ],
   "compatibility": {
     "minimum": "12",
-    "verified": "13"
+    "verified": "14"
   },
   "esmodules": ["scripts/module.js"],
   "styles": ["styles/wfc.css"],
@@ -17,7 +17,7 @@
   ],
   "url": "https://github.com/RexTheCapt/foundry-wave-function-collapse",
   "manifest": "https://github.com/RexTheCapt/foundry-wave-function-collapse/releases/latest/download/module.json",
-  "download": "https://github.com/RexTheCapt/foundry-wave-function-collapse/releases/download/v0.1.0/module.zip",
+  "download": "https://github.com/RexTheCapt/foundry-wave-function-collapse/releases/download/v0.1.1/module.zip",
   "readme": "https://github.com/RexTheCapt/foundry-wave-function-collapse#readme",
   "bugs": "https://github.com/RexTheCapt/foundry-wave-function-collapse/issues",
   "changelog": "https://github.com/RexTheCapt/foundry-wave-function-collapse/blob/main/CHANGELOG.md",
