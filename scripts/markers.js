@@ -303,7 +303,7 @@ export class MarkerTool {
         data = kind === "cell" ? { tags: [], features: last.features } : last;
         if (!data.tags.length && !data.features.length) return;
       } else {
-        const initial = existing ?? (kind === "cell" ? { tags: [], features: last.features } : last);
+        const initial = existing ? [...existing.tags ?? [], ...existing.features] : (kind === "cell" ? last.features : [...last.tags, ...last.features]);
         data = await MarkerTool.prompt(kind, initial);
         if (!data) return;
         if (data.tags.length || data.features.length) {
@@ -344,18 +344,17 @@ export class MarkerTool {
     this.preview = null;
   }
 
-  /** Ask for marker contents. Resolves with { tags, features }, or null when cancelled. */
-  static async prompt(kind, initial = {}) {
+  /**
+   * Ask what the marker requires, in one text box. Door types (door, secret) become door
+   * features, anything else a side tag. Resolves with { tags, features }, or null when cancelled.
+   */
+  static async prompt(kind, initial = []) {
     const esc = v => foundry.utils.escapeHTML(String(v ?? ""));
     const cell = kind === "cell";
-    const tagsRow = cell ? "" : `<div class="form-group">
-        <label>${game.i18n.localize("WFC.Markers.Tags")}</label>
-        <div class="form-fields"><input type="text" name="tags" value="${esc((initial.tags ?? []).join(", "))}" placeholder="wall" autofocus></div>
-        <p class="hint">${game.i18n.localize("WFC.Markers.TagsHint")}</p></div>`;
-    const content = `${tagsRow}<div class="form-group">
-        <label>${game.i18n.localize("WFC.Markers.Features")}</label>
-        <div class="form-fields"><input type="text" name="features" value="${esc((initial.features ?? []).join(", "))}" placeholder="door" ${cell ? "autofocus" : ""}></div>
-        <p class="hint">${game.i18n.format(cell ? "WFC.Markers.CellFeaturesHint" : "WFC.Markers.FeaturesHint", { types: FEATURE_NAMES.join(", ") })}</p></div>
+    const content = `<div class="form-group">
+        <label>${game.i18n.localize(cell ? "WFC.Markers.CellRequirements" : "WFC.Markers.Requirements")}</label>
+        <div class="form-fields"><input type="text" name="requirements" value="${esc(initial.join(", "))}" placeholder="${cell ? "door" : "wall"}" autofocus></div>
+        <p class="hint">${game.i18n.format(cell ? "WFC.Markers.CellRequirementsHint" : "WFC.Markers.RequirementsHint", { types: FEATURE_NAMES.join(", ") })}</p></div>
       <p class="hint">${game.i18n.localize("WFC.Markers.EmptyHint")}</p>`;
     const result = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize(cell ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-draw-polygon" },
@@ -363,18 +362,13 @@ export class MarkerTool {
       ok: {
         label: game.i18n.localize("WFC.Markers.Set"),
         icon: "fa-solid fa-check",
-        callback: (event, button) => ({
-          tags: button.form.elements.tags?.value ?? "",
-          features: button.form.elements.features?.value ?? ""
-        })
+        callback: (event, button) => button.form.elements.requirements.value
       },
       rejectClose: false
     });
-    if (!result) return null;
-    const { tags, features, moved } = classifyRequirements(result.tags, result.features);
-    if (moved.length) {
-      ui.notifications.warn(game.i18n.format(cell ? "WFC.Markers.NotAFeatureCell" : "WFC.Markers.NotAFeature", { entries: moved.join(", "), types: FEATURE_NAMES.join(", ") }));
-    }
+    if (result === null || result === undefined) return null;
+    const { tags, features } = classifyRequirements([], result);
+    if (cell && tags.length) ui.notifications.warn(game.i18n.format("WFC.Markers.NotAFeatureCell", { entries: tags.join(", "), types: FEATURE_NAMES.join(", ") }));
     return { tags: cell ? [] : tags, features };
   }
 }

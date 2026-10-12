@@ -107,14 +107,12 @@
     "Markers": {
       "EdgeTitle": "Edge marker",
       "CellTitle": "Cell marker",
-      "Tags": "Side tags",
-      "TagsHint": "One of the two tiles touching this edge must have exactly these tags on that side, e.g. wall. The other tile is kept compatible automatically.",
-      "Features": "Door features",
-      "FeaturesHint": "{types}: one of the two tiles must draw that kind of door on this edge. Anything else typed here is treated as a side tag.",
-      "CellFeaturesHint": "{types}: the tile placed here must draw that kind of door inside the tile.",
-      "NotAFeature": "\"{entries}\" is not a door type ({types}); it was added to the side tags instead.",
+      "Requirements": "Required on this edge",
+      "RequirementsHint": "Comma separated. A door type ({types}) must be drawn on this edge by one of the two tiles; any other entry is a side tag that one of the two tiles must carry exactly there, the other being kept compatible.",
+      "CellRequirements": "Required inside the tile",
+      "CellRequirementsHint": "{types}: the tile placed here must draw that kind of door inside the tile.",
       "NotAFeatureCell": "\"{entries}\" is not a door type ({types}) and was ignored.",
-      "EmptyHint": "Leave both empty to remove the marker.",
+      "EmptyHint": "Leave it empty to remove the marker.",
       "Set": "Set marker"
     },
     "Zones": {

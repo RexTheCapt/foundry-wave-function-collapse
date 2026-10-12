@@ -172,6 +172,73 @@ const BASES = [
 ];
 const SIDE_NAMES = ["n", "e", "s", "w"];
 
+/**
+ * Water tiles. Each has a mask (x, y in 0..1 -> water?) drawn over floor. Edge tags are derived
+ * from how much of each edge is water: "water" (whole edge), "water-mid" (the middle, for
+ * streams), "water-e"/"water-w" (east or west half of a horizontal edge), "water-n"/"water-s"
+ * (north or south half of a vertical edge) or plain "floor".
+ */
+const STREAM = [0.3, 0.7];
+const inBand = (v, [a, b]) => v >= a && v <= b;
+const WATER_TILES = [
+  { name: "water-pool", weight: 0.3, mask: (x, y) => Math.hypot(x - 0.5, y - 0.5) <= 0.3 },
+  { name: "water-end", weight: 0.3, mask: (x, y) => Math.hypot(x - 0.5, y - 0.5) <= 0.2 || (inBand(x, STREAM) && y <= 0.5) },
+  { name: "water-straight", weight: 0.4, mask: (x, y) => inBand(x, STREAM) },
+  { name: "water-bend", weight: 0.3, mask: (x, y) => Math.hypot(x - 0.5, y - 0.5) <= 0.2 || (inBand(x, STREAM) && y <= 0.5) || (inBand(y, STREAM) && x >= 0.5) },
+  { name: "water-t", weight: 0.15, mask: (x, y) => Math.hypot(x - 0.5, y - 0.5) <= 0.2 || (inBand(x, STREAM) && y <= 0.5) || inBand(y, STREAM) },
+  { name: "water-cross", weight: 0.1, mask: (x, y) => inBand(x, STREAM) || inBand(y, STREAM) },
+  { name: "water-full", weight: 0.5, mask: () => true },
+  { name: "water-half", weight: 0.4, mask: (x, y) => x >= 0.5 },
+  { name: "water-corner", weight: 0.4, mask: (x, y) => Math.hypot(x - 1, y) <= 0.5 },
+  { name: "water-corner-inner", weight: 0.2, mask: (x, y) => Math.hypot(x, y - 1) > 0.5 }
+];
+const WATER = [46, 96, 168];
+const WATER_DEEP = [34, 72, 136];
+const SHORE = [70, 60, 48];
+
+function drawWater(r, mask) {
+  const m = new Uint8Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) m[y * SIZE + x] = mask((x + 0.5) / SIZE, (y + 0.5) / SIZE) ? 1 : 0;
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      if (!m[y * SIZE + x]) continue;
+      const shore = [[2, 0], [-2, 0], [0, 2], [0, -2]].some(([dx, dy]) => {
+        const nx = x + dx, ny = y + dy;
+        return nx >= 0 && ny >= 0 && nx < SIZE && ny < SIZE && !m[ny * SIZE + nx];
+      });
+      const ripple = Math.sin((x + y) / 6) > 0.7 ? 14 : 0;
+      const color = shore ? SHORE : (Math.sin(x / 9) * Math.cos(y / 7) > 0.4 ? WATER_DEEP : WATER);
+      const n = (r.rand() - 0.5) * 12 + ripple;
+      r.set(x, y, color.map(c => Math.max(0, Math.min(255, Math.round(c + n)))));
+    }
+  }
+  return m;
+}
+
+/** Edge tag from the water coverage along one edge of a mask. */
+function waterEdgeTag(m, side) {
+  const samples = [];
+  for (let k = 0; k < SIZE; k++) {
+    const idx = side === "n" ? k : side === "s" ? (SIZE - 1) * SIZE + k : side === "w" ? k * SIZE : k * SIZE + SIZE - 1;
+    samples.push(m[idx]);
+  }
+  const covered = samples.filter(Boolean).length / SIZE;
+  if (covered === 0) return "floor";
+  if (covered >= 0.95) return "water";
+  const first = samples.indexOf(1) / SIZE;
+  const last = (samples.lastIndexOf(1) + 1) / SIZE;
+  const horizontal = side === "n" || side === "s";
+  if (first <= 0.05 && last >= 0.45 && last <= 0.55) return horizontal ? "water-w" : "water-n";
+  if (first >= 0.45 && first <= 0.55 && last >= 0.95) return horizontal ? "water-e" : "water-s";
+  return "water-mid";
+}
+
+function rotateMask(src) {
+  const dst = new Uint8Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) dst[y * SIZE + x] = src[(SIZE - 1 - x) * SIZE + y];
+  return dst;
+}
+
 /** Tag of one side, given the side types of the tile. */
 function sideTag(types, side) {
   const t = types[side];
@@ -248,5 +315,27 @@ BASES.forEach((def, index) => {
     walls = rotateWalls(walls);
   }
 });
+WATER_TILES.forEach((def, index) => {
+  const r = new Raster(2000 + index);
+  floorBase(r);
+  let mask = drawWater(r, def.mask);
+  let px = r.px;
+  const seen = new Set();
+  for (let rot = 0; rot < 4; rot++) {
+    const tags = {};
+    for (const sd of SIDE_NAMES) tags[sd] = [waterEdgeTag(mask, sd)];
+    const signature = SIDE_NAMES.map(sd => tags[sd][0]).join("/");
+    if (!seen.has(signature)) {
+      seen.add(signature);
+      const file = rot === 0 ? `${def.name}.png` : `${def.name}-${rot * 90}.png`;
+      fs.writeFileSync(path.join(OUT, file), encodePNG(SIZE, SIZE, px));
+      mapping.tiles[file] = { tags, walls: [], weight: def.weight, rotate: false };
+      count++;
+    }
+    px = rotateRaster(px);
+    mask = rotateMask(mask);
+  }
+});
+mapping.description += " Water tiles connect through water, water-mid (streams), water-e/w/n/s (half edges) tags.";
 fs.writeFileSync(path.join(OUT, "mapping.json"), JSON.stringify(mapping, null, 2) + "\n");
 console.log(`Wrote ${count} tiles to ${OUT}`);

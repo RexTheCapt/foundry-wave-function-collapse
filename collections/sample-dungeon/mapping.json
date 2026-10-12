@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "Sample dungeon",
-  "description": "Simple generated stone tiles with one-sided walls: the tile tagged wall draws the band, any floor side may face it, and corner markers on floor sides keep walls straight. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
+  "description": "Simple generated stone tiles with one-sided walls: the tile tagged wall draws the band, any floor side may face it, and corner markers on floor sides keep walls straight. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers. Water tiles connect through water, water-mid (streams), water-e/w/n/s (half edges) tags.",
   "boundary": [
     "wall"
   ],
@@ -1397,6 +1397,557 @@
         }
       ],
       "weight": 0.5,
+      "rotate": false
+    },
+    "water-pool.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-end.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-end-90.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-end-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-end-270.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-straight.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-straight-90.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-bend.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-bend-90.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-bend-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-bend-270.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.3,
+      "rotate": false
+    },
+    "water-t.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.15,
+      "rotate": false
+    },
+    "water-t-90.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.15,
+      "rotate": false
+    },
+    "water-t-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.15,
+      "rotate": false
+    },
+    "water-t-270.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.15,
+      "rotate": false
+    },
+    "water-cross.png": {
+      "tags": {
+        "n": [
+          "water-mid"
+        ],
+        "e": [
+          "water-mid"
+        ],
+        "s": [
+          "water-mid"
+        ],
+        "w": [
+          "water-mid"
+        ]
+      },
+      "walls": [],
+      "weight": 0.1,
+      "rotate": false
+    },
+    "water-full.png": {
+      "tags": {
+        "n": [
+          "water"
+        ],
+        "e": [
+          "water"
+        ],
+        "s": [
+          "water"
+        ],
+        "w": [
+          "water"
+        ]
+      },
+      "walls": [],
+      "weight": 0.5,
+      "rotate": false
+    },
+    "water-half.png": {
+      "tags": {
+        "n": [
+          "water-e"
+        ],
+        "e": [
+          "water"
+        ],
+        "s": [
+          "water-e"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-half-90.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-s"
+        ],
+        "s": [
+          "water"
+        ],
+        "w": [
+          "water-s"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-half-180.png": {
+      "tags": {
+        "n": [
+          "water-w"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-w"
+        ],
+        "w": [
+          "water"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-half-270.png": {
+      "tags": {
+        "n": [
+          "water"
+        ],
+        "e": [
+          "water-n"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-n"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-corner.png": {
+      "tags": {
+        "n": [
+          "water-e"
+        ],
+        "e": [
+          "water-n"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-corner-90.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "water-s"
+        ],
+        "s": [
+          "water-e"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-corner-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "water-w"
+        ],
+        "w": [
+          "water-s"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-corner-270.png": {
+      "tags": {
+        "n": [
+          "water-w"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "water-n"
+        ]
+      },
+      "walls": [],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "water-corner-inner.png": {
+      "tags": {
+        "n": [
+          "water"
+        ],
+        "e": [
+          "water"
+        ],
+        "s": [
+          "water-e"
+        ],
+        "w": [
+          "water-n"
+        ]
+      },
+      "walls": [],
+      "weight": 0.2,
+      "rotate": false
+    },
+    "water-corner-inner-90.png": {
+      "tags": {
+        "n": [
+          "water-e"
+        ],
+        "e": [
+          "water"
+        ],
+        "s": [
+          "water"
+        ],
+        "w": [
+          "water-s"
+        ]
+      },
+      "walls": [],
+      "weight": 0.2,
+      "rotate": false
+    },
+    "water-corner-inner-180.png": {
+      "tags": {
+        "n": [
+          "water-w"
+        ],
+        "e": [
+          "water-s"
+        ],
+        "s": [
+          "water"
+        ],
+        "w": [
+          "water"
+        ]
+      },
+      "walls": [],
+      "weight": 0.2,
+      "rotate": false
+    },
+    "water-corner-inner-270.png": {
+      "tags": {
+        "n": [
+          "water"
+        ],
+        "e": [
+          "water-n"
+        ],
+        "s": [
+          "water-w"
+        ],
+        "w": [
+          "water"
+        ]
+      },
+      "walls": [],
+      "weight": 0.2,
       "rotate": false
     }
   }
