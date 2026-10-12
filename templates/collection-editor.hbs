@@ -1,0 +1,47 @@
+<div class="wfc-editor-head">
+  <div class="form-group">
+    <label>{{localize "WFC.Editor.Name"}}</label>
+    <div class="form-fields"><input type="text" name="name" value="{{name}}"></div>
+  </div>
+  <div class="form-group">
+    <label>{{localize "WFC.Editor.Description"}}</label>
+    <div class="form-fields"><input type="text" name="description" value="{{description}}"></div>
+  </div>
+  <div class="form-group">
+    <label>{{localize "WFC.Editor.Boundary"}}</label>
+    <div class="form-fields"><input type="text" name="boundary" value="{{boundary}}" placeholder="wall"></div>
+    <p class="hint">{{localize "WFC.Editor.BoundaryHint"}}</p>
+  </div>
+  <div class="form-group">
+    <label>{{localize "WFC.Editor.Dir"}}</label>
+    <div class="form-fields"><code class="wfc-dir">{{dir}}</code></div>
+  </div>
+  {{#if error}}<p class="notification error">{{error}}</p>{{/if}}
+  {{#unless hasMapping}}<p class="notification info">{{localize "WFC.Editor.NoMappingYet"}}</p>{{/unless}}
+</div>
+<div class="wfc-toolbar">
+  <button type="button" data-action="addTile"><i class="fa-solid fa-plus"></i> {{localize "WFC.Editor.AddTile"}}</button>
+  <button type="button" data-action="scan"><i class="fa-solid fa-magnifying-glass"></i> {{localize "WFC.Editor.Scan"}}</button>
+  <button type="button" data-action="reload" title="{{localize 'WFC.Editor.Reload'}}"><i class="fa-solid fa-rotate"></i></button>
+  <span class="wfc-spacer"></span>
+  <button type="submit"><i class="fa-solid fa-floppy-disk"></i> {{localize "WFC.Editor.Save"}}</button>
+</div>
+<p class="hint">{{localize "WFC.Editor.AddTileHint"}}</p>
+<div class="wfc-tile-list">
+  {{#each tiles as |t|}}
+  <div class="wfc-tile-card" data-file="{{t.file}}">
+    <img src="{{t.src}}" alt="{{t.file}}" loading="lazy">
+    <div class="wfc-tile-body">
+      <strong title="{{t.file}}">{{t.file}}</strong>
+      <span class="wfc-tags">{{t.tags}}</span>
+      <span class="wfc-meta">{{localize "WFC.Editor.TileMeta" walls=t.walls weight=t.weight}}{{#if t.rotate}} · {{localize "WFC.Tile.Rotate"}}{{/if}}</span>
+    </div>
+    <div class="wfc-tile-actions">
+      <button type="button" data-action="editTile" title="{{localize 'WFC.Editor.Edit'}}"><i class="fa-solid fa-pen"></i></button>
+      <button type="button" data-action="removeTile" title="{{localize 'WFC.Editor.Delete'}}"><i class="fa-solid fa-trash"></i></button>
+    </div>
+  </div>
+  {{else}}
+  <p class="wfc-empty">{{localize "WFC.Editor.NoTiles"}}</p>
+  {{/each}}
+</div>

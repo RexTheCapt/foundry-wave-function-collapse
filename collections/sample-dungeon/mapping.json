@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "name": "Sample dungeon",
+  "description": "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline.",
+  "boundary": [
+    "wall"
+  ],
+  "tiles": {
+    "floor.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [],
+      "weight": 4,
+      "rotate": false
+    },
+    "wall-1.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 3,
+      "rotate": true
+    },
+    "wall-corner.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 2,
+      "rotate": true
+    },
+    "wall-corridor.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 1.5,
+      "rotate": true
+    },
+    "wall-3.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": true
+    },
+    "rock.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "door-1.png": {
+      "tags": {
+        "n": [
+          "door"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            0.35,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.35,
+            0,
+            0.65,
+            0
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.65,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": true
+    },
+    "door-corner.png": {
+      "tags": {
+        "n": [
+          "door"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            0.35,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.35,
+            0,
+            0.65,
+            0
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.65,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.5,
+      "rotate": true
+    },
+    "door-3.png": {
+      "tags": {
+        "n": [
+          "door"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            0.35,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.35,
+            0,
+            0.65,
+            0
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.65,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.4,
+      "rotate": true
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "WFC": {
+    "Tools": {
+      "Outline": "Draw dungeon outline (WFC)",
+      "OutlineHint": "Click grid points to outline the dungeon. Click the first point or press Enter to finish, right-click to undo, Escape to clear.",
+      "FromDrawing": "Generate dungeon from selected drawings (WFC)",
+      "Collections": "Tile collections (WFC)",
+      "Clear": "Remove generated dungeon (WFC)"
+    },
+    "Settings": {
+      "CollectionsRoot": {
+        "Name": "Collections root directory",
+        "Hint": "New tile collections are created as sub directories of this folder in your Foundry user data."
+      },
+      "WallSnapDivisions": {
+        "Name": "Wall editor snap divisions",
+        "Hint": "How many segments each tile side is divided into when drawing walls in the tile editor."
+      },
+      "CollectionsMenu": {
+        "Name": "Tile collections",
+        "Label": "Manage collections",
+        "Hint": "Create tile collections, register existing directories and edit tile tags and walls."
+      }
+    },
+    "Collections": {
+      "Title": "WFC tile collections",
+      "Hint": "A collection is a directory with tile images and a mapping.json that stores the side tags and walls for each tile. Tiles may be added to or removed from a collection at any time.",
+      "New": "New collection",
+      "Create": "Create",
+      "NameLabel": "Collection name",
+      "Created": "Collection created at {dir}",
+      "AddExisting": "Add existing directory",
+      "AlreadyRegistered": "That directory is already registered.",
+      "Open": "Edit",
+      "Remove": "Unregister collection",
+      "RemoveConfirm": "Unregister <code>{dir}</code>? No files are deleted.",
+      "Removed": "Collection unregistered.",
+      "Refresh": "Refresh",
+      "Empty": "No collections registered yet. Create one or add an existing directory.",
+      "TileCount": "{count} tiles",
+      "MissingMapping": "No mapping.json yet"
+    },
+    "Editor": {
+      "Title": "Collection",
+      "Name": "Name",
+      "Description": "Description",
+      "Boundary": "Default boundary tags",
+      "BoundaryHint": "Suggested tags for tile sides that face the outline, e.g. \"wall\". Used to pre-fill the generate dialog.",
+      "Dir": "Directory",
+      "NoMappingYet": "This directory has no mapping.json yet. It is written when you save.",
+      "AddTile": "Add tile",
+      "AddTileHint": "Images must be inside the collection directory. Use the file picker's upload button to copy images into it. \"Scan directory\" adds every unmapped image with empty tags.",
+      "Scan": "Scan directory",
+      "ScanAdded": "Added {count} new tiles. Edit them to set tags and walls.",
+      "ScanNone": "Every image in the directory is already mapped.",
+      "Reload": "Reload from disk",
+      "Save": "Save mapping",
+      "Saved": "mapping.json saved.",
+      "Edit": "Edit tile",
+      "Delete": "Remove tile from collection",
+      "DeleteConfirm": "Remove <code>{file}</code> from the mapping? The image file is kept.",
+      "NoTiles": "No tiles yet. Add a tile or scan the directory.",
+      "OutsideDirectory": "Tiles must be stored inside the collection directory {dir}.",
+      "TileMeta": "{walls} walls · weight {weight}"
+    },
+    "Tile": {
+      "Title": "Tile",
+      "TagsHint": "Comma separated tags per side. Two tiles may touch only when the tag sets on the shared side are identical. Use * to match anything.",
+      "North": "North tags",
+      "East": "East tags",
+      "South": "South tags",
+      "West": "West tags",
+      "Weight": "Weight",
+      "WeightHint": "Relative probability of this tile being chosen.",
+      "Rotate": "Allow rotation",
+      "RotateHint": "Also use this tile rotated by 90, 180 and 270 degrees. Tags and walls rotate with it.",
+      "File": "File",
+      "WallsHint": "Click two snap points to add a wall segment. Hold Shift to chain segments. Right-click a wall to remove it.",
+      "WallNormal": "Wall",
+      "WallDoor": "Door",
+      "WallSecret": "Secret door",
+      "UndoWall": "Undo last wall",
+      "ClearWalls": "Clear all walls",
+      "WallCount": "Walls:",
+      "Save": "Save tile",
+      "Cancel": "Cancel"
+    },
+    "Generate": {
+      "Title": "Generate dungeon",
+      "Cells": "{count} grid cells inside the outline.",
+      "Collections": "Tile collections to use",
+      "NoCollections": "No tile collections with tiles are registered. Open the collections menu to add some.",
+      "SelectAll": "All",
+      "SelectNone": "None",
+      "NoneSelected": "Select at least one collection.",
+      "Seed": "Seed",
+      "Random": "New random seed",
+      "Boundary": "Boundary tags",
+      "BoundaryHint": "Tile sides that face outside the outline must match these tags. Leave empty for no constraint.",
+      "OutlineWalls": "Walls along the outline",
+      "TileWalls": "Walls from tiles",
+      "MergeWalls": "Merge collinear walls",
+      "ClearExisting": "Replace previous generation in this area",
+      "ClearExistingHint": "Removes tiles and walls created by this module that lie inside the outline before placing the new ones.",
+      "Generate": "Generate",
+      "Cancel": "Cancel",
+      "NoCells": "The outline does not contain any grid cells.",
+      "NoTiles": "The selected collections contain no tiles.",
+      "Failed": "No valid tile arrangement found after {attempts} attempts (stuck at grid cell {cell}). Add more tiles, relax tags or try another seed.",
+      "Done": "Placed {tiles} tiles and {walls} walls."
+    },
+    "Clear": {
+      "Title": "Remove generated dungeon",
+      "Content": "Remove tiles and walls placed by this module on the current scene.",
+      "Last": "Last generation",
+      "All": "Everything generated",
+      "Cancel": "Cancel",
+      "Done": "Removed {tiles} tiles and {walls} walls.",
+      "Nothing": "Nothing to remove."
+    },
+    "Errors": {
+      "SquareGrid": "The WFC generator requires a scene with a square grid.",
+      "NoScene": "No active scene.",
+      "NoDrawing": "Select one or more rectangle, polygon or ellipse drawings first.",
+      "NeedThreePoints": "An outline needs at least three points.",
+      "SaveFailed": "Could not save the collection: {message}",
+      "LoadFailed": "Could not read the collection directory: {message}"
+    }
+  }
+}

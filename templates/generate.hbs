@@ -1,0 +1,47 @@
+<p class="hint">{{localize "WFC.Generate.Cells" count=cellCount}}</p>
+<fieldset class="wfc-collection-picker">
+  <legend>{{localize "WFC.Generate.Collections"}}</legend>
+  <div class="wfc-toolbar">
+    <button type="button" data-action="selectAll">{{localize "WFC.Generate.SelectAll"}}</button>
+    <button type="button" data-action="selectNone">{{localize "WFC.Generate.SelectNone"}}</button>
+  </div>
+  {{#each collections as |c|}}
+  <label class="wfc-check-row">
+    <input type="checkbox" name="collection-{{c.index}}" data-index="{{c.index}}" {{#if c.checked}}checked{{/if}}>
+    <span class="wfc-check-label"><strong>{{c.name}}</strong> <span class="wfc-meta">{{localize "WFC.Collections.TileCount" count=c.count}}</span></span>
+  </label>
+  {{/each}}
+</fieldset>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.Seed"}}</label>
+  <div class="form-fields">
+    <input type="text" name="seed" value="{{seed}}">
+    <button type="button" data-action="randomSeed" title="{{localize 'WFC.Generate.Random'}}"><i class="fa-solid fa-dice"></i></button>
+  </div>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.Boundary"}}</label>
+  <div class="form-fields"><input type="text" name="boundaryTags" value="{{boundaryTags}}"></div>
+  <p class="hint">{{localize "WFC.Generate.BoundaryHint"}}</p>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.OutlineWalls"}}</label>
+  <div class="form-fields"><input type="checkbox" name="placeOutlineWalls" {{#if placeOutlineWalls}}checked{{/if}}></div>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.TileWalls"}}</label>
+  <div class="form-fields"><input type="checkbox" name="placeTileWalls" {{#if placeTileWalls}}checked{{/if}}></div>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.MergeWalls"}}</label>
+  <div class="form-fields"><input type="checkbox" name="mergeWalls" {{#if mergeWalls}}checked{{/if}}></div>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.ClearExisting"}}</label>
+  <div class="form-fields"><input type="checkbox" name="clearExisting" {{#if clearExisting}}checked{{/if}}></div>
+  <p class="hint">{{localize "WFC.Generate.ClearExistingHint"}}</p>
+</div>
+<footer class="form-footer">
+  <button type="button" data-action="cancel"><i class="fa-solid fa-xmark"></i> {{localize "WFC.Generate.Cancel"}}</button>
+  <button type="submit"><i class="fa-solid fa-dungeon"></i> {{localize "WFC.Generate.Generate"}}</button>
+</footer>

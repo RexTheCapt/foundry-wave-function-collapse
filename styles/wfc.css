@@ -1,0 +1,41 @@
+.wfc-app .window-content { display: flex; flex-direction: column; gap: 0.5rem; }
+.wfc-app form, .wfc-app .wfc-editor-head { display: flex; flex-direction: column; gap: 0.5rem; }
+.wfc-app .hint { margin: 0; font-size: var(--font-size-12, 0.85em); opacity: 0.8; }
+.wfc-app .wfc-toolbar { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
+.wfc-app .wfc-toolbar button { flex: 0 0 auto; width: auto; line-height: 1.6; padding: 0.15rem 0.6rem; }
+.wfc-app .wfc-toolbar select { flex: 0 0 auto; width: auto; }
+.wfc-app .wfc-spacer { flex: 1; }
+.wfc-app .wfc-dir { font-family: var(--font-mono, monospace); font-size: 0.8em; opacity: 0.75; word-break: break-all; }
+.wfc-app .wfc-meta { font-size: 0.85em; opacity: 0.8; }
+.wfc-app .wfc-empty { text-align: center; opacity: 0.7; padding: 1rem; }
+.wfc-app .form-footer { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
+.wfc-app .form-footer button { width: auto; }
+
+/* Collections list */
+.wfc-collection-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.wfc-collection-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border-light-2, rgba(0,0,0,0.25)); border-radius: 4px; }
+.wfc-collection-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.wfc-collection-actions { display: flex; gap: 0.25rem; }
+.wfc-collection-actions button { width: auto; line-height: 1.6; padding: 0.15rem 0.5rem; }
+
+/* Collection editor */
+.wfc-collection-editor .wfc-tile-list { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.5rem; min-height: 120px; }
+.wfc-tile-card { display: flex; gap: 0.5rem; align-items: center; padding: 0.35rem; border: 1px solid var(--color-border-light-2, rgba(0,0,0,0.25)); border-radius: 4px; }
+.wfc-tile-card img { width: 64px; height: 64px; object-fit: cover; border: 1px solid rgba(0,0,0,0.4); flex: 0 0 auto; }
+.wfc-tile-body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.wfc-tile-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wfc-tile-body .wfc-tags { font-size: 0.8em; opacity: 0.85; }
+.wfc-tile-actions { display: flex; flex-direction: column; gap: 0.25rem; }
+.wfc-tile-actions button { width: auto; line-height: 1.5; padding: 0.1rem 0.45rem; }
+
+/* Tile editor */
+.wfc-tile-editor-grid { display: grid; grid-template-columns: 360px 1fr; gap: 1rem; }
+.wfc-wall-editor { display: flex; flex-direction: column; gap: 0.4rem; }
+.wfc-wall-editor canvas { width: 360px; height: 360px; cursor: crosshair; border: 1px solid rgba(0,0,0,0.5); background: #222; touch-action: none; }
+.wfc-tile-fields { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* Generate dialog */
+.wfc-collection-picker { display: flex; flex-direction: column; gap: 0.3rem; }
+.wfc-check-row { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.wfc-check-row input { flex: 0 0 auto; margin: 0; }
+.wfc-check-label { display: flex; gap: 0.5rem; align-items: baseline; }

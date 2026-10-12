@@ -1,0 +1,29 @@
+<div class="wfc-toolbar">
+  <button type="button" data-action="create"><i class="fa-solid fa-plus"></i> {{localize "WFC.Collections.New"}}</button>
+  <button type="button" data-action="addExisting"><i class="fa-solid fa-folder-open"></i> {{localize "WFC.Collections.AddExisting"}}</button>
+  <button type="button" data-action="refresh" title="{{localize 'WFC.Collections.Refresh'}}"><i class="fa-solid fa-rotate"></i></button>
+</div>
+<p class="hint">{{localize "WFC.Collections.Hint"}}</p>
+{{#if collections.length}}
+<ul class="wfc-collection-list">
+  {{#each collections as |c|}}
+  <li class="wfc-collection-row" data-dir="{{c.dir}}">
+    <div class="wfc-collection-info">
+      <strong>{{c.name}}</strong>
+      <span class="wfc-dir" title="{{c.dir}}">{{c.dir}}</span>
+      <span class="wfc-meta">
+        {{#if c.error}}<i class="fa-solid fa-triangle-exclamation"></i> {{c.error}}
+        {{else if c.hasMapping}}{{localize "WFC.Collections.TileCount" count=c.count}}
+        {{else}}<i class="fa-solid fa-circle-info"></i> {{localize "WFC.Collections.MissingMapping"}}{{/if}}
+      </span>
+    </div>
+    <div class="wfc-collection-actions">
+      <button type="button" data-action="open" data-dir="{{c.dir}}"><i class="fa-solid fa-pen-to-square"></i> {{localize "WFC.Collections.Open"}}</button>
+      <button type="button" data-action="remove" data-dir="{{c.dir}}" title="{{localize 'WFC.Collections.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  </li>
+  {{/each}}
+</ul>
+{{else}}
+<p class="wfc-empty">{{localize "WFC.Collections.Empty"}}</p>
+{{/if}}

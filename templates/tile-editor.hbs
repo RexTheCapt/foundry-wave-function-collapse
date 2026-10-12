@@ -1,0 +1,51 @@
+<div class="wfc-tile-editor-grid">
+  <div class="wfc-wall-editor">
+    <canvas data-wall-canvas width="{{canvasSize}}" height="{{canvasSize}}"></canvas>
+    <p class="hint">{{localize "WFC.Tile.WallsHint"}}</p>
+    <div class="wfc-toolbar">
+      <select name="wallType">
+        {{#each wallTypes as |w|}}<option value="{{w.value}}">{{w.label}}</option>{{/each}}
+      </select>
+      <button type="button" data-action="undoWall" title="{{localize 'WFC.Tile.UndoWall'}}"><i class="fa-solid fa-rotate-left"></i></button>
+      <button type="button" data-action="clearWalls" title="{{localize 'WFC.Tile.ClearWalls'}}"><i class="fa-solid fa-eraser"></i></button>
+      <span class="wfc-meta">{{localize "WFC.Tile.WallCount"}} <span data-wall-count>{{wallCount}}</span></span>
+    </div>
+  </div>
+  <div class="wfc-tile-fields">
+    <p class="hint">{{localize "WFC.Tile.TagsHint"}}</p>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.North"}}</label>
+      <div class="form-fields"><input type="text" name="tags.n" value="{{tags.n}}" placeholder="floor"></div>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.East"}}</label>
+      <div class="form-fields"><input type="text" name="tags.e" value="{{tags.e}}" placeholder="floor"></div>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.South"}}</label>
+      <div class="form-fields"><input type="text" name="tags.s" value="{{tags.s}}" placeholder="floor"></div>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.West"}}</label>
+      <div class="form-fields"><input type="text" name="tags.w" value="{{tags.w}}" placeholder="floor"></div>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.Weight"}}</label>
+      <div class="form-fields"><input type="number" name="weight" value="{{weight}}" min="0.01" step="0.1"></div>
+      <p class="hint">{{localize "WFC.Tile.WeightHint"}}</p>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.Rotate"}}</label>
+      <div class="form-fields"><input type="checkbox" name="rotate" {{#if rotate}}checked{{/if}}></div>
+      <p class="hint">{{localize "WFC.Tile.RotateHint"}}</p>
+    </div>
+    <div class="form-group">
+      <label>{{localize "WFC.Tile.File"}}</label>
+      <div class="form-fields"><code class="wfc-dir">{{src}}</code></div>
+    </div>
+  </div>
+</div>
+<footer class="form-footer">
+  <button type="button" data-action="cancel"><i class="fa-solid fa-xmark"></i> {{localize "WFC.Tile.Cancel"}}</button>
+  <button type="submit"><i class="fa-solid fa-floppy-disk"></i> {{localize "WFC.Tile.Save"}}</button>
+</footer>

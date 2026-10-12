@@ -1,0 +1,321 @@
+/**
+ * Wave function collapse solver for square-grid tile sets.
+ *
+ * This module has no Foundry dependencies so it can be unit tested with plain node.
+ *
+ * Terminology
+ * - tile:     an image plus the tags on its four sides, its walls and a weight.
+ * - variant:  a tile at a specific rotation (0, 90, 180 or 270 degrees clockwise).
+ * - cell:     a grid position { i: row, j: column } that needs a variant.
+ *
+ * Side tags are compared as sets. A variant may sit next to another variant when
+ * the tag set on the shared side is identical on both tiles. The wildcard tag "*"
+ * matches any tag set.
+ */
+
+export const SIDES = ["n", "e", "s", "w"];
+export const OPPOSITE = { n: "s", e: "w", s: "n", w: "e" };
+export const DELTAS = { n: [-1, 0], e: [0, 1], s: [1, 0], w: [0, -1] };
+export const WILDCARD = "*";
+
+/**
+ * Normalize a tag list (array or comma separated string) into a sorted array of unique strings.
+ * @param {string[]|string|null|undefined} tags
+ * @returns {string[]}
+ */
+export function normalizeTags(tags) {
+  if (tags === null || tags === undefined) return [];
+  const list = Array.isArray(tags) ? tags : String(tags).split(",");
+  const set = new Set();
+  for (const t of list) {
+    const s = String(t).trim();
+    if (s) set.add(s);
+  }
+  return [...set].sort();
+}
+
+/**
+ * Two normalized tag lists match when they are identical, or when either contains the wildcard.
+ * @param {string[]} a
+ * @param {string[]} b
+ * @returns {boolean}
+ */
+export function tagsMatch(a, b) {
+  if (a.includes(WILDCARD) || b.includes(WILDCARD)) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Rotate a point in normalized tile space (0..1, y down) clockwise around the tile center.
+ * @param {[number, number]} point
+ * @param {number} rotation  Degrees, multiple of 90.
+ * @returns {[number, number]}
+ */
+export function rotatePoint([x, y], rotation) {
+  const r = ((rotation % 360) + 360) % 360;
+  switch (r) {
+    case 0: return [x, y];
+    case 90: return [1 - y, x];
+    case 180: return [1 - x, 1 - y];
+    case 270: return [y, 1 - x];
+    default: throw new Error(`Unsupported rotation ${rotation}`);
+  }
+}
+
+/**
+ * Coerce a raw tile definition (as found in mapping.json) into the shape the solver expects.
+ * @param {object} raw
+ * @returns {{id: string, src: string, tags: Record<string, string[]>, walls: {c: number[], door: number}[], weight: number, rotate: boolean}}
+ */
+export function normalizeTile(raw) {
+  const tags = {};
+  for (const side of SIDES) tags[side] = normalizeTags(raw.tags?.[side]);
+  const walls = [];
+  for (const w of raw.walls ?? []) {
+    const c = Array.isArray(w) ? w : w?.c;
+    if (!Array.isArray(c) || c.length !== 4) continue;
+    const coords = c.map(Number);
+    if (coords.some(Number.isNaN)) continue;
+    const door = Number(Array.isArray(w) ? 0 : (w.door ?? 0)) || 0;
+    walls.push({ c: coords, door: Math.min(2, Math.max(0, door)) });
+  }
+  const weight = Number(raw.weight);
+  return {
+    id: raw.id ?? raw.src ?? "",
+    src: raw.src ?? raw.id ?? "",
+    tags,
+    walls,
+    weight: Number.isFinite(weight) && weight > 0 ? weight : 1,
+    rotate: Boolean(raw.rotate)
+  };
+}
+
+/**
+ * Produce a rotated copy of a normalized tile.
+ * A clockwise rotation moves the north side to the east.
+ * @param {ReturnType<typeof normalizeTile>} tile
+ * @param {number} rotation
+ */
+export function rotateTile(tile, rotation) {
+  const steps = (((Math.round(rotation / 90)) % 4) + 4) % 4;
+  const tags = {};
+  for (let k = 0; k < 4; k++) tags[SIDES[(k + steps) % 4]] = tile.tags[SIDES[k]];
+  const walls = tile.walls.map(w => {
+    const [x1, y1, x2, y2] = w.c;
+    const [a, b] = rotatePoint([x1, y1], steps * 90);
+    const [c, d] = rotatePoint([x2, y2], steps * 90);
+    return { ...w, c: [a, b, c, d] };
+  });
+  return { ...tile, rotation: steps * 90, tags, walls };
+}
+
+function variantSignature(v) {
+  const walls = v.walls
+    .map(w => `${w.door}:${w.c.map(n => Math.round(n * 1000) / 1000).join(",")}`)
+    .sort()
+    .join(";");
+  return `${SIDES.map(s => v.tags[s].join("|")).join("/")}#${walls}`;
+}
+
+/**
+ * Expand tiles into rotation variants. Rotations that produce an identical variant
+ * (for symmetric tiles) are dropped so the tile does not become more likely than intended.
+ * @param {ReturnType<typeof normalizeTile>[]} tiles
+ */
+export function expandVariants(tiles) {
+  const variants = [];
+  for (const tile of tiles) {
+    const rotations = tile.rotate ? [0, 90, 180, 270] : [0];
+    const seen = new Set();
+    for (const r of rotations) {
+      const v = rotateTile(tile, r);
+      const sig = variantSignature(v);
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      variants.push({ tile, rotation: v.rotation, tags: v.tags, walls: v.walls, weight: tile.weight });
+    }
+  }
+  return variants;
+}
+
+/** Small fast string hash (FNV-1a, 32 bit). */
+export function hashSeed(str) {
+  let h = 0x811c9dc5;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** Deterministic PRNG returning floats in [0, 1). */
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const cellKey = (i, j) => `${i},${j}`;
+
+/**
+ * Solve a set of cells with the given variants.
+ *
+ * @param {object} options
+ * @param {{i: number, j: number}[]} options.cells  Cells that need a tile.
+ * @param {ReturnType<typeof expandVariants>} options.variants
+ * @param {string[]|string|null} [options.boundaryTags]  When set, every side that faces outside
+ *   the cell set must match these tags. When null or empty the outside is unconstrained.
+ * @param {string} [options.seed]
+ * @param {number} [options.maxAttempts]  Restarts allowed on contradiction.
+ * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null}}
+ */
+export function solve({ cells, variants, boundaryTags = null, seed = "", maxAttempts = 20 }) {
+  const V = variants.length;
+  const N = cells.length;
+  if (!V) throw new Error("No tile variants to solve with");
+  if (!N) return { success: true, attempts: 0, assignments: [], failedCell: null };
+
+  const index = new Map(cells.map((c, k) => [cellKey(c.i, c.j), k]));
+  const neighbors = cells.map(c => SIDES.map(side => {
+    const [di, dj] = DELTAS[side];
+    return index.get(cellKey(c.i + di, c.j + dj)) ?? -1;
+  }));
+
+  // compat[s][a * V + b] === 1 when variant a may have variant b on its side SIDES[s]
+  const compat = SIDES.map(side => {
+    const m = new Uint8Array(V * V);
+    for (let a = 0; a < V; a++) {
+      const ta = variants[a].tags[side];
+      for (let b = 0; b < V; b++) {
+        if (tagsMatch(ta, variants[b].tags[OPPOSITE[side]])) m[a * V + b] = 1;
+      }
+    }
+    return m;
+  });
+
+  const boundary = normalizeTags(boundaryTags);
+  const constrainBoundary = boundary.length > 0;
+  const boundaryOk = SIDES.map(side => Uint8Array.from(variants, v => (
+    !constrainBoundary || tagsMatch(v.tags[side], boundary) ? 1 : 0
+  )));
+
+  const weights = Float64Array.from(variants, v => v.weight);
+  const weightLog = Float64Array.from(weights, w => w * Math.log(w));
+
+  let last = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const rng = mulberry32(hashSeed(`${seed}#${attempt}`));
+    last = attemptSolve({ N, V, cells, variants, neighbors, compat, boundaryOk, weights, weightLog, rng });
+    if (last.success) return { ...last, attempts: attempt + 1 };
+  }
+  return { success: false, attempts: maxAttempts, assignments: [], failedCell: last?.failedCell ?? null };
+}
+
+function attemptSolve({ N, V, cells, variants, neighbors, compat, boundaryOk, weights, weightLog, rng }) {
+  const domains = Array.from({ length: N }, () => new Uint8Array(V).fill(1));
+  const counts = new Int32Array(N).fill(V);
+  const inQueue = new Uint8Array(N);
+  const stack = [];
+
+  // Apply boundary constraints and seed the propagation queue with every cell.
+  for (let k = 0; k < N; k++) {
+    const d = domains[k];
+    for (let s = 0; s < 4; s++) {
+      if (neighbors[k][s] !== -1) continue;
+      const ok = boundaryOk[s];
+      for (let a = 0; a < V; a++) {
+        if (d[a] && !ok[a]) { d[a] = 0; counts[k]--; }
+      }
+    }
+    if (counts[k] === 0) return { success: false, assignments: [], failedCell: cells[k] };
+    inQueue[k] = 1;
+    stack.push(k);
+  }
+
+  const propagate = () => {
+    const allowed = new Uint8Array(V);
+    while (stack.length) {
+      const k = stack.pop();
+      inQueue[k] = 0;
+      const dk = domains[k];
+      for (let s = 0; s < 4; s++) {
+        const n = neighbors[k][s];
+        if (n < 0) continue;
+        const m = compat[s];
+        allowed.fill(0);
+        for (let a = 0; a < V; a++) {
+          if (!dk[a]) continue;
+          const row = a * V;
+          for (let b = 0; b < V; b++) if (m[row + b]) allowed[b] = 1;
+        }
+        const dn = domains[n];
+        let changed = false;
+        for (let b = 0; b < V; b++) {
+          if (dn[b] && !allowed[b]) { dn[b] = 0; counts[n]--; changed = true; }
+        }
+        if (counts[n] === 0) return n;
+        if (changed && !inQueue[n]) { inQueue[n] = 1; stack.push(n); }
+      }
+    }
+    return -1;
+  };
+
+  let failed = propagate();
+  if (failed >= 0) return { success: false, assignments: [], failedCell: cells[failed] };
+
+  for (;;) {
+    // Pick the cell with the lowest weighted entropy among unresolved cells.
+    let best = -1;
+    let bestEntropy = Infinity;
+    for (let k = 0; k < N; k++) {
+      if (counts[k] <= 1) continue;
+      const d = domains[k];
+      let sumW = 0;
+      let sumWL = 0;
+      for (let a = 0; a < V; a++) {
+        if (!d[a]) continue;
+        sumW += weights[a];
+        sumWL += weightLog[a];
+      }
+      const entropy = Math.log(sumW) - sumWL / sumW + rng() * 1e-6;
+      if (entropy < bestEntropy) { bestEntropy = entropy; best = k; }
+    }
+    if (best < 0) break;
+
+    // Collapse it to a single variant chosen by weight.
+    const d = domains[best];
+    let total = 0;
+    for (let a = 0; a < V; a++) if (d[a]) total += weights[a];
+    let pick = rng() * total;
+    let chosen = -1;
+    for (let a = 0; a < V; a++) {
+      if (!d[a]) continue;
+      pick -= weights[a];
+      chosen = a;
+      if (pick <= 0) break;
+    }
+    d.fill(0);
+    d[chosen] = 1;
+    counts[best] = 1;
+    inQueue[best] = 1;
+    stack.push(best);
+    failed = propagate();
+    if (failed >= 0) return { success: false, assignments: [], failedCell: cells[failed] };
+  }
+
+  const assignments = [];
+  for (let k = 0; k < N; k++) {
+    const d = domains[k];
+    const variantIndex = d.indexOf(1);
+    assignments.push({ cell: cells[k], variant: variants[variantIndex], variantIndex });
+  }
+  return { success: true, assignments, failedCell: null };
+}
