@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- Fixed the tile editor rejecting most weights: the number input only accepted values on a 0.1
+  grid starting at 0.01, so 1, 0.5 or 4 were refused by the browser. Any positive number is now
+  accepted. Weights are relative and need not be unique.
+
 ## 0.7.0
 
 - Tile sides can list alternative tag sets separated by `|` (for example `floor | wall`), in the

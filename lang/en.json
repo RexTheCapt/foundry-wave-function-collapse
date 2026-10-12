@@ -85,7 +85,7 @@
       "South": "South tags",
       "West": "West tags",
       "Weight": "Weight",
-      "WeightHint": "Relative probability of this tile being chosen.",
+      "WeightHint": "Relative probability of this tile being chosen: a tile with weight 2 is picked twice as often as one with weight 1. Any positive number works and several tiles may share a value.",
       "Rotate": "Allow rotation",
       "RotateHint": "Also use this tile rotated by 90, 180 and 270 degrees. Tags and walls rotate with it.",
       "File": "File",
