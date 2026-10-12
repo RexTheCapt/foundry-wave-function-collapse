@@ -8,6 +8,7 @@
  *   "restricted": ["door"],            // optional tags that may only appear on marked edges
  *   "compatible": { "wall": ["floor"] }, // which differing tags may face each other; this is the
  *                                        // default when the key is missing, {} disables it
+ *   "incompatible": { "door": ["wall", "door"] }, // optional: tags that never face each other
  *   "tiles": {
  *     "floor.png": {                   // file name, relative to the collection directory
  *       "tags": { "n": ["floor"], "e": [["floor"], ["wall"]], "s": ["floor"], "w": ["floor"] },
@@ -28,7 +29,7 @@ export const MAPPING_VERSION = 1;
 export const DEFAULT_COMPATIBLE = { wall: ["floor"] };
 
 export function emptyMapping(name = "") {
-  return { version: MAPPING_VERSION, name, description: "", boundary: [], restricted: [], compatible: { ...DEFAULT_COMPATIBLE }, tiles: {} };
+  return { version: MAPPING_VERSION, name, description: "", boundary: [], restricted: [], compatible: { ...DEFAULT_COMPATIBLE }, incompatible: {}, tiles: {} };
 }
 
 export function emptyTileEntry() {
@@ -60,6 +61,7 @@ export function normalizeMapping(raw, fallbackName = "") {
   mapping.restricted = normalizeTags(raw.restricted);
   // A mapping without the key gets the default table; an explicit empty object means none.
   mapping.compatible = raw.compatible === undefined ? { ...DEFAULT_COMPATIBLE } : normalizeCompatible(raw.compatible);
+  mapping.incompatible = normalizeCompatible(raw.incompatible);
   const tiles = raw.tiles && typeof raw.tiles === "object" ? raw.tiles : {};
   for (const [file, entry] of Object.entries(tiles)) {
     if (!file || file.includes("/") || file.includes("\\")) continue;

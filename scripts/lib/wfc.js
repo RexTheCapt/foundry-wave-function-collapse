@@ -63,30 +63,47 @@ export function normalizeTags(tags) {
 
 /**
  * Build a tag compatibility table from a mapping's "compatible" object, e.g.
- * `{ "wall": ["floor"] }` meaning a wall side may face a floor side.
+ * `{ "wall": ["floor"] }` meaning a wall side may face a floor side, and its "incompatible"
+ * object, e.g. `{ "door": ["wall", "door"] }` meaning a door side never faces a wall or door
+ * side, whatever the other rules say.
  *
- * The relation is symmetric. A tag that appears as a key no longer matches itself unless it lists
- * itself; tags that never appear as a key keep matching themselves.
+ * Both relations are symmetric. A tag that appears as a key of "compatible" no longer matches
+ * itself unless it lists itself; tags that never appear as a key keep matching themselves.
  * @param {Record<string, string[]|string>|null|undefined} spec
- * @returns {{pairs: Map<string, Set<string>>, explicit: Set<string>}}
+ * @param {Record<string, string[]|string>|null|undefined} [incompatibleSpec]
+ * @returns {{pairs: Map<string, Set<string>>, explicit: Set<string>, incompatible: Map<string, Set<string>>}}
  */
-export function buildCompatibility(spec) {
+export function buildCompatibility(spec, incompatibleSpec = null) {
   const pairs = new Map();
   const explicit = new Set();
-  const add = (x, y) => {
-    if (!pairs.has(x)) pairs.set(x, new Set());
-    pairs.get(x).add(y);
+  const incompatible = new Map();
+  const add = (map, x, y) => {
+    if (!map.has(x)) map.set(x, new Set());
+    map.get(x).add(y);
   };
   for (const [rawTag, list] of Object.entries(spec ?? {})) {
     const tag = String(rawTag).trim();
     if (!tag) continue;
     explicit.add(tag);
     for (const other of normalizeTags(list)) {
-      add(tag, other);
-      add(other, tag);
+      add(pairs, tag, other);
+      add(pairs, other, tag);
     }
   }
-  return { pairs, explicit };
+  for (const [rawTag, list] of Object.entries(incompatibleSpec ?? {})) {
+    const tag = String(rawTag).trim();
+    if (!tag) continue;
+    for (const other of normalizeTags(list)) {
+      add(incompatible, tag, other);
+      add(incompatible, other, tag);
+    }
+  }
+  return { pairs, explicit, incompatible };
+}
+
+/** Whether two single tags are listed as incompatible. */
+export function tagsIncompatible(x, y, compat = null) {
+  return compat?.incompatible?.get(x)?.has(y) === true;
 }
 
 /** Merge several compatibility specs (objects) into one. */
@@ -170,6 +187,10 @@ export function tagsMatch(a, b, compat = null) {
 }
 
 function setsMatch(a, b, compat) {
+  // An incompatible pair vetoes the match before anything else, wildcards included.
+  if (compat?.incompatible?.size) {
+    for (const x of a) for (const y of b) if (tagsIncompatible(x, y, compat)) return false;
+  }
   if (a.includes(WILDCARD) || b.includes(WILDCARD)) return true;
   if (!compat || !compat.pairs.size) {
     if (a.length !== b.length) return false;
@@ -345,8 +366,8 @@ function placeTest(place, c, compatTable, boundary) {
  * @param {Record<string, object>} cellConstraints
  * @param {Record<string, string[]>|null} compatible
  */
-export function allowedVariants(variants, cellConstraints, compatible = null) {
-  const compatTable = buildCompatibility(compatible);
+export function allowedVariants(variants, cellConstraints, compatible = null, incompatible = null) {
+  const compatTable = buildCompatibility(compatible, incompatible);
   const tests = PLACES.map(place => placeTest(place, cellConstraints?.[place], compatTable, null)).filter(Boolean);
   return variants.filter(v => tests.every(t => t(v)));
 }
@@ -362,6 +383,7 @@ export function allowedVariants(variants, cellConstraints, compatible = null) {
  *   empty the outside is unconstrained.
  * @param {Record<string, string[]>|null} [options.compatible]  Tag compatibility table, see
  *   `buildCompatibility`. Without it, adjacent sides must carry identical tag sets.
+ * @param {Record<string, string[]>|null} [options.incompatible]  Tag pairs that never face each other.
  * @param {Array<Record<string, {require?: string[], compatibleWith?: string[], forbid?: string[], requireFeatures?: string[], forbidFeatures?: string[], requireAny?: string[]}>>|null} [options.constraints]
  *   Optional per-cell constraints, parallel to `cells`, keyed by side ("n", "e", "s", "w") or "c"
  *   for the tile center. `require` forces the side's tag set to be exactly these tags,
@@ -383,7 +405,7 @@ export function allowedVariants(variants, cellConstraints, compatible = null) {
  *   that forced it), "shared" when a shared edge requirement could not be met, or "collapse"
  *   when a random choice led to a dead end (which triggers a restart).
  */
-export function solve({ cells, variants, boundaryTags = null, compatible = null, constraints = null, shared = [], seed = "", maxAttempts = 5, maxBacktracks = 20000 }) {
+export function solve({ cells, variants, boundaryTags = null, compatible = null, incompatible = null, constraints = null, shared = [], seed = "", maxAttempts = 5, maxBacktracks = 20000 }) {
   const V = variants.length;
   const N = cells.length;
   if (!V) throw new Error("No tile variants to solve with");
@@ -395,7 +417,7 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
     return index.get(cellKey(c.i + di, c.j + dj)) ?? -1;
   }));
 
-  const compatTable = buildCompatibility(compatible);
+  const compatTable = buildCompatibility(compatible, incompatible);
 
   // A shared tag requirement whose tags only ever match themselves means both sides must carry
   // exactly those tags: enforce it on both cells up front instead of lazily.
@@ -479,8 +501,8 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
  * @param {{outside?: string[], boundaryTags?: string[]}} [context]  Sides facing outside the region.
  * @returns {string[]}
  */
-export function describeCellConstraints(cellConstraints, variants, compatible = null, { outside = [], boundaryTags = [] } = {}) {
-  const compat = buildCompatibility(compatible);
+export function describeCellConstraints(cellConstraints, variants, compatible = null, { outside = [], boundaryTags = [], incompatible = null } = {}) {
+  const compat = buildCompatibility(compatible, incompatible);
   const boundary = normalizeTags(boundaryTags);
   const lines = [];
   const count = test => variants.filter(test).length;

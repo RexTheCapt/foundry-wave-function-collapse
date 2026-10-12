@@ -154,8 +154,10 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
   of alternatives becomes its own variant with the tile's full weight, so keep the number of
   alternatives small. In `mapping.json` a side with alternatives is an array of arrays:
   `"e": [["floor"], ["wall"]]`.
+- A collection can also declare **incompatible tags**, for example `door: wall, door`. A listed
+  pair never faces each other, whatever the compatible table, alternatives or wildcards say.
 - An empty tag set only matches another empty tag set.
-- The wildcard `*` matches anything.
+- The wildcard `*` matches anything, except pairs listed as incompatible.
 - When a tile allows rotation, its tags and walls rotate with it (clockwise: north becomes east).
 
 ### One-sided or two-sided walls
@@ -222,6 +224,8 @@ Each collection directory contains a `mapping.json` that maps every tile image i
 - `compatible` maps a tag to the tags it may face, e.g. `{ "wall": ["floor"] }`. The relation is
   symmetric; tables of all selected collections are merged. New collections start with
   `wall: floor`, which is also assumed when the key is missing; write `{}` to disable it.
+- `incompatible` maps a tag to tags it must never face, e.g. `{ "door": ["wall", "door"] }`. Also
+  symmetric and merged across collections; it overrides everything else.
 
 You can edit the file by hand; the collection editor reloads it from disk.
 

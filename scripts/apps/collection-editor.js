@@ -57,6 +57,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
       boundary: mapping.boundary.join(", "),
       restricted: mapping.restricted.join(", "),
       compatible: compatibleToText(mapping.compatible),
+      incompatible: compatibleToText(mapping.incompatible),
       hasMapping: this.collection.hasMapping,
       error: this.collection.error,
       tiles,
@@ -103,6 +104,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
     mapping.boundary = normalizeTags(form.elements.boundary?.value ?? "");
     mapping.restricted = normalizeTags(form.elements.restricted?.value ?? "");
     mapping.compatible = compatibleFromText(form.elements.compatible?.value ?? "");
+    mapping.incompatible = compatibleFromText(form.elements.incompatible?.value ?? "");
   }
 
   async save() {

@@ -137,7 +137,8 @@ export async function generateDungeon({
   if (!tiles.length) return failWith(game.i18n.localize("WFC.Generate.NoTiles"));
   const variants = expandVariants(tiles);
   const compatible = mergeCompatibility(collections.map(c => c.mapping.compatible));
-  log.debug(`${tiles.length} tiles expanded to ${variants.length} variants; compatibility`, compatible);
+  const incompatible = mergeCompatibility(collections.map(c => c.mapping.incompatible));
+  log.debug(`${tiles.length} tiles expanded to ${variants.length} variants; compatibility`, compatible, "incompatible", incompatible);
 
   // Per-cell constraints: restricted tags and features first, then surrounding tiles, then markers.
   const constraints = cells.map(() => ({}));
@@ -242,10 +243,10 @@ export async function generateDungeon({
   log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${zoneSides} sides ruled by ${zones.length} zones, ${appliedMarkers}/${markers.length} markers inside the outline, ${shared.length} shared edge requirements`);
 
   const started = performance.now();
-  const result = solve({ cells, variants, boundaryTags, compatible, constraints, shared, seed: String(seed) });
+  const result = solve({ cells, variants, boundaryTags, compatible, incompatible, constraints, shared, seed: String(seed) });
   log.debug(`solve finished in ${Math.round(performance.now() - started)} ms`, { success: result.success, attempts: result.attempts, failedCell: result.failedCell });
   if (!result.success) {
-    const message = explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, boundaryTags, shared });
+    const message = explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, incompatible, boundaryTags, shared });
     log.warn("generation failed:", message, { failure: result.failure, constraints: result.failure ? constraints[cellIndex.get(cellKey(result.failure.cell.i, result.failure.cell.j))] : null });
     ui.notifications.error(message.split("\n")[0]);
     return { ok: false, message };
@@ -306,7 +307,7 @@ export async function generateDungeon({
 }
 
 /** Build a readable explanation of a failed solve. */
-function explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, boundaryTags, shared }) {
+function explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, incompatible, boundaryTags, shared }) {
   const f = result.failure;
   const label = cell => `(${cell.j + 1}, ${cell.i + 1})`;
   if (!f) return game.i18n.format("WFC.Generate.Failed", { attempts: result.attempts, cell: "?" });
@@ -315,7 +316,7 @@ function explainFailure(result, { cells, cellIndex, cellSet, constraints, varian
     const [di, dj] = DELTAS[side];
     return !cellSet.has(cellKey(f.cell.i + di, f.cell.j + dj));
   });
-  const lines = describeCellConstraints(constraints[k], variants, compatible, { outside, boundaryTags });
+  const lines = describeCellConstraints(constraints[k], variants, compatible, { outside, boundaryTags, incompatible });
   const sharedHere = shared.filter(r => r.a === k || r.b === k).map(r => {
     const other = cells[r.a === k ? r.b : r.a];
     const side = r.a === k ? r.sideA : r.sideB;
@@ -411,6 +412,7 @@ export async function candidatesForCell(cell, collectionDirs, { restrictedTags =
   const collections = await loadCollections(collectionDirs);
   const variants = expandVariants(collections.flatMap(collectionTiles));
   const compatible = mergeCompatibility(collections.map(c => c.mapping.compatible));
+  const incompatible = mergeCompatibility(collections.map(c => c.mapping.incompatible));
   const existing = await existingTiles(scene, size);
   const voids = new Set();
   const areas = getEmptyAreas(scene);
@@ -455,13 +457,13 @@ export async function candidatesForCell(cell, collectionDirs, { restrictedTags =
     const missing = m.features.filter(f => !(neighbor?.features?.[OPPOSITE[side]] ?? []).includes(f));
     if (missing.length) c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), ...missing]);
   }
-  const allowed = allowedVariants(variants, constraints, compatible);
+  const allowed = allowedVariants(variants, constraints, compatible, incompatible);
   const existingTile = generatedDocs(scene.tiles.contents).find(t => {
     const tc = tileCell(t, size);
     return tc && tc.i === cell.i && tc.j === cell.j;
   }) ?? null;
   log.debug("candidatesForCell", { cell, constraints, allowed: allowed.length, total: variants.length, voids: [...voids] });
-  return { variants, allowed, constraints, compatible, existingTile };
+  return { variants, allowed, constraints, compatible, incompatible, existingTile };
 }
 
 function pointInPolygonCenter(cell, polygon, size) {

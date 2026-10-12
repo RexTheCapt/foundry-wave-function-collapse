@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- Collections can declare incompatible tags (`door: wall, door`): listed pairs never face each
+  other, overriding compatible tags, alternatives and wildcards. Editable in the collection
+  editor and merged across selected collections.
+
 ## 0.8.1
 
 - New collections start with the compatible tags `wall: floor`; mappings without the key assume it.

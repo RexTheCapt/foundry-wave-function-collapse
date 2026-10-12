@@ -423,3 +423,23 @@ test("mappings default to wall: floor compatibility unless given explicitly", as
   assert.deepEqual(normalizeMapping({ tiles: {}, compatible: {} }).compatible, {});
   assert.deepEqual(normalizeMapping({ tiles: {}, compatible: { door: "floor" } }).compatible, { door: ["floor"] });
 });
+
+test("incompatible tags veto a match, wildcards and compatible tables included", async () => {
+  const compat = buildCompatibility({ wall: ["floor"] }, { door: ["wall", "door"] });
+  assert.ok(!tagsMatch(["door"], ["door"], compat), "door never faces door");
+  assert.ok(!tagsMatch(["door"], ["wall"], compat), "door never faces wall");
+  assert.ok(!tagsMatch(["*"], ["door"], buildCompatibility(null, { door: ["*"] })), "even the wildcard");
+  assert.ok(tagsMatch(["door"], ["floor"], buildCompatibility({ door: ["floor"] }, { door: ["wall", "door"] })));
+  assert.ok(tagsMatch(["wall"], ["floor"], compat));
+  assert.ok(!tagsMatch(["floor", "rubble"], ["wall"], buildCompatibility({ wall: ["floor", "rubble"] }, { rubble: ["wall"] })), "any incompatible pair in a set vetoes");
+  // Solver: two door-tagged sides may not meet even with plain equality matching.
+  const doorTile = normalizeTile({ id: "d", tags: { n: ["x"], e: ["door"], s: ["x"], w: ["door"] }, weight: 1 });
+  const plain = normalizeTile({ id: "p", tags: { n: ["x"], e: ["x"], s: ["x"], w: ["x"] }, weight: 1 });
+  const cells = [{ i: 0, j: 0 }, { i: 0, j: 1 }];
+  const without = solve({ cells, variants: expandVariants([doorTile, plain]), constraints: [{ e: { require: ["door"] } }, {}], seed: 1 });
+  assert.ok(without.success && without.assignments[1].variant.tile.id === "d");
+  const vetoed = solve({ cells, variants: expandVariants([doorTile, plain]), incompatible: { door: ["door"] }, constraints: [{ e: { require: ["door"] } }, {}], seed: 1 });
+  assert.equal(vetoed.success, false);
+  const { normalizeMapping } = await import("../scripts/lib/mapping.js");
+  assert.deepEqual(normalizeMapping({ tiles: {}, incompatible: { door: "wall, door" } }).incompatible, { door: ["door", "wall"] });
+});

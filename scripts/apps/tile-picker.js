@@ -36,6 +36,7 @@ export class TilePickerDialog extends HandlebarsApplicationMixin(ApplicationV2) 
     this.allowed = options.allowed;
     this.constraints = options.constraints;
     this.compatible = options.compatible;
+    this.incompatible = options.incompatible;
     this.existingTile = options.existingTile;
     this.showAll = false;
   }
@@ -52,7 +53,7 @@ export class TilePickerDialog extends HandlebarsApplicationMixin(ApplicationV2) 
       allowedCount: this.allowed.length,
       totalCount: this.variants.length,
       showAll: this.showAll,
-      rules: describeCellConstraints(this.constraints, this.variants, this.compatible),
+      rules: describeCellConstraints(this.constraints, this.variants, this.compatible, { incompatible: this.incompatible }),
       current: this.existingTile ? this.existingTile.flags?.["wave-function-collapse"]?.tile?.split("/").pop() : null,
       candidates: list.map((v, index) => ({
         index: this.variants.indexOf(v),
