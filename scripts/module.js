@@ -60,7 +60,7 @@ function registerSettings() {
     scope: "client",
     config: false,
     type: Object,
-    default: { requirements: "door" }
+    default: { tags: "", features: "door" }
   });
   game.settings.register(MODULE_ID, "lastSelection", {
     scope: "client",

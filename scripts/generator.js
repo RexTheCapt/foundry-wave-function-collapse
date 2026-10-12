@@ -169,8 +169,8 @@ export async function generateDungeon({
       const k = cellIndex.get(cellKey(m.i, m.j));
       if (k === undefined) continue;
       const c = ensure(k, CENTER);
-      c.requireFeatures = m.requirements;
-      c.forbidFeatures = without(c.forbidFeatures, m.requirements);
+      c.requireFeatures = m.features;
+      c.forbidFeatures = without(c.forbidFeatures, m.features);
       appliedMarkers++;
       continue;
     }
@@ -180,23 +180,31 @@ export async function generateDungeon({
     appliedMarkers++;
     for (const x of inside) {
       const c = ensure(x.k, x.side);
-      c.forbid = without(c.forbid, m.requirements);
-      c.forbidFeatures = without(c.forbidFeatures, m.requirements);
+      c.forbid = without(c.forbid, m.tags);
+      c.forbidFeatures = without(c.forbidFeatures, m.features);
     }
     const outer = ends.find(x => x.k === undefined);
     const outerTile = outer ? existing.get(cellKey(outer.cell.i, outer.cell.j)) : null;
-    // Each requirement must be met by one of the two tiles on the edge, as that side's exact tag
-    // or as a door drawn there; adjacency rules keep the other side compatible.
-    for (const entry of m.requirements) {
+    // Side tags: one of the two tiles carries exactly these tags on the edge; adjacency rules
+    // keep the other side compatible with them.
+    if (m.tags.length) {
       if (inside.length === 2) {
         const [A, B] = inside;
-        shared.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, any: entry });
+        shared.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, tags: m.tags });
+      } else if (!outerTile || !tagsMatch(outerTile.tags[outer.side], m.tags)) {
+        ensure(inside[0].k, inside[0].side).require = m.tags;
+      }
+    }
+    // Features: one of the two tiles draws that kind of door on the edge.
+    for (const feature of m.features) {
+      if (inside.length === 2) {
+        const [A, B] = inside;
+        shared.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, feature });
         continue;
       }
-      const outerHasIt = outerTile && (tagsMatch(outerTile.tags[outer.side], [entry]) || (outerTile.features?.[outer.side] ?? []).includes(entry));
-      if (outerHasIt) continue;
+      if ((outerTile?.features?.[outer.side] ?? []).includes(feature)) continue;
       const c = ensure(inside[0].k, inside[0].side);
-      c.requireAny = normalizeTags([...(c.requireAny ?? []), entry]);
+      c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), feature]);
     }
   }
   log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${appliedMarkers}/${markers.length} markers inside the outline, ${shared.length} shared edge requirements`);

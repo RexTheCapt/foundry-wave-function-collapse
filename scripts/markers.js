@@ -8,25 +8,42 @@
 
 import { MODULE_ID } from "./constants.js";
 import { edgeKey, edgeEndpoints, cellMarkerKey, markerTargetAtPoint, edgesAlongLine } from "./lib/edges.js";
-import { normalizeTags } from "./lib/wfc.js";
+import { normalizeTags, DOOR_FEATURES } from "./lib/wfc.js";
 import { log } from "./log.js";
 
 const FLAG_PATH = `flags.${MODULE_ID}.edgeMarkers`;
 
+/** Door types that count as features. */
+export const FEATURE_NAMES = Object.values(DOOR_FEATURES);
+
+/**
+ * Split a list of entries into side tags and door features. Entries that are not door types are
+ * tags, so a "wall" typed into the features field still becomes a wall requirement.
+ */
+export function classifyRequirements(tags, features) {
+  const t = new Set(normalizeTags(tags));
+  const f = new Set();
+  const moved = [];
+  for (const entry of normalizeTags(features)) {
+    if (FEATURE_NAMES.includes(entry)) f.add(entry);
+    else { t.add(entry); moved.push(entry); }
+  }
+  return { tags: [...t].sort(), features: [...f].sort(), moved };
+}
+
 function normalizeMarker(m) {
-  // Older markers stored separate tags and features; both are plain requirements now.
-  const requirements = normalizeTags([...(m.requirements ?? []), ...(m.tags ?? []), ...(m.features ?? [])]);
-  if (!requirements.length) return null;
+  // 0.4.1 stored a single "requirements" list; split it back into tags and features.
+  const { tags, features } = classifyRequirements([...(m.tags ?? []), ...(m.requirements ?? [])], m.features ?? []);
   if (m.kind === "cell") {
     const i = Number(m.i);
     const j = Number(m.j);
-    if (!Number.isInteger(i) || !Number.isInteger(j)) return null;
-    return { kind: "cell", i, j, requirements };
+    if (!Number.isInteger(i) || !Number.isInteger(j) || !features.length) return null;
+    return { kind: "cell", i, j, features };
   }
   const x = Number(m.x);
   const y = Number(m.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { kind: "edge", x, y, dir: m.dir === "v" ? "v" : "h", requirements };
+  if (!Number.isFinite(x) || !Number.isFinite(y) || (!tags.length && !features.length)) return null;
+  return { kind: "edge", x, y, dir: m.dir === "v" ? "v" : "h", tags, features };
 }
 
 export function markerKey(m) {
@@ -46,12 +63,12 @@ export async function setMarkers(markers, scene = canvas.scene) {
 }
 
 /**
- * Set the marker on a target. Empty requirements remove it.
+ * Set the marker on a target. Empty tags and features remove it.
  * @param {{kind: "edge", x, y, dir}|{kind: "cell", i, j}} target
- * @param {string[]|string} requirements
+ * @param {{tags?: string[]|string, features?: string[]|string}} data
  */
-export async function setMarker(target, requirements, scene = canvas.scene) {
-  const marker = normalizeMarker({ ...target, requirements: normalizeTags(requirements) });
+export async function setMarker(target, data, scene = canvas.scene) {
+  const marker = normalizeMarker({ ...target, tags: normalizeTags(data.tags), features: normalizeTags(data.features) });
   const key = markerKey(target);
   const list = getMarkers(scene).filter(m => markerKey(m) !== key);
   if (marker) list.push(marker);
@@ -63,7 +80,10 @@ export async function clearMarkers(scene = canvas.scene) {
 }
 
 function markerLabel(m) {
-  return m.requirements.join(", ");
+  const parts = [];
+  if (m.tags?.length) parts.push(m.tags.join(", "));
+  if (m.features?.length) parts.push(m.features.map(f => `[${f}]`).join(" "));
+  return parts.join(" ");
 }
 
 /** Draws the markers of the current scene on the canvas. */
@@ -157,7 +177,8 @@ export class MarkerTool {
 
   get last() {
     const v = game.settings.get(MODULE_ID, "lastMarker") ?? {};
-    return normalizeTags([...(normalizeTags(v.requirements)), ...normalizeTags(v.tags), ...normalizeTags(v.features)]);
+    const { tags, features } = classifyRequirements([...normalizeTags(v.tags), ...normalizeTags(v.requirements)], v.features);
+    return { tags, features };
   }
 
   activate() {
@@ -239,18 +260,24 @@ export class MarkerTool {
       const single = targets.length === 1 ? targets[0] : null;
       const existing = single ? existingFor(single) : null;
       const kind = targets[0].kind;
-      let requirements;
+      const last = this.last;
+      let data;
       if (drag.shift && !existing) {
-        requirements = this.last;
-        if (!requirements.length) return;
+        data = kind === "cell" ? { tags: [], features: last.features } : last;
+        if (!data.tags.length && !data.features.length) return;
       } else {
-        requirements = await MarkerTool.prompt(kind, existing?.requirements ?? this.last);
-        if (requirements === null) return;
-        if (requirements.length) await game.settings.set(MODULE_ID, "lastMarker", { requirements: requirements.join(", ") });
+        const initial = existing ?? (kind === "cell" ? { tags: [], features: last.features } : last);
+        data = await MarkerTool.prompt(kind, initial);
+        if (!data) return;
+        if (data.tags.length || data.features.length) {
+          await game.settings.set(MODULE_ID, "lastMarker", { tags: data.tags.join(", "), features: data.features.join(", ") });
+        }
       }
       const keys = new Set(targets.map(markerKey));
       const kept = markers.filter(m => !keys.has(markerKey(m)));
-      const added = requirements.length ? targets.map(t => ({ ...t, requirements })) : [];
+      const added = (data.tags.length || data.features.length)
+        ? targets.map(t => ({ ...t, tags: t.kind === "cell" ? [] : data.tags, features: data.features }))
+        : [];
       await setMarkers([...kept, ...added]);
     } catch (err) {
       log.error("marker tool failed", err);
@@ -280,14 +307,18 @@ export class MarkerTool {
     this.preview = null;
   }
 
-  /** Ask for marker requirements. Resolves with a normalized list, or null when cancelled. */
-  static async prompt(kind, initial = []) {
+  /** Ask for marker contents. Resolves with { tags, features }, or null when cancelled. */
+  static async prompt(kind, initial = {}) {
     const esc = v => foundry.utils.escapeHTML(String(v ?? ""));
     const cell = kind === "cell";
-    const content = `<div class="form-group">
-        <label>${game.i18n.localize(cell ? "WFC.Markers.CellRequirements" : "WFC.Markers.Requirements")}</label>
-        <div class="form-fields"><input type="text" name="requirements" value="${esc(initial.join(", "))}" placeholder="${cell ? "door" : "wall"}" autofocus></div>
-        <p class="hint">${game.i18n.localize(cell ? "WFC.Markers.CellRequirementsHint" : "WFC.Markers.RequirementsHint")}</p></div>
+    const tagsRow = cell ? "" : `<div class="form-group">
+        <label>${game.i18n.localize("WFC.Markers.Tags")}</label>
+        <div class="form-fields"><input type="text" name="tags" value="${esc((initial.tags ?? []).join(", "))}" placeholder="wall" autofocus></div>
+        <p class="hint">${game.i18n.localize("WFC.Markers.TagsHint")}</p></div>`;
+    const content = `${tagsRow}<div class="form-group">
+        <label>${game.i18n.localize("WFC.Markers.Features")}</label>
+        <div class="form-fields"><input type="text" name="features" value="${esc((initial.features ?? []).join(", "))}" placeholder="door" ${cell ? "autofocus" : ""}></div>
+        <p class="hint">${game.i18n.format(cell ? "WFC.Markers.CellFeaturesHint" : "WFC.Markers.FeaturesHint", { types: FEATURE_NAMES.join(", ") })}</p></div>
       <p class="hint">${game.i18n.localize("WFC.Markers.EmptyHint")}</p>`;
     const result = await foundry.applications.api.DialogV2.prompt({
       window: { title: game.i18n.localize(cell ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-draw-polygon" },
@@ -295,11 +326,18 @@ export class MarkerTool {
       ok: {
         label: game.i18n.localize("WFC.Markers.Set"),
         icon: "fa-solid fa-check",
-        callback: (event, button) => button.form.elements.requirements.value
+        callback: (event, button) => ({
+          tags: button.form.elements.tags?.value ?? "",
+          features: button.form.elements.features?.value ?? ""
+        })
       },
       rejectClose: false
     });
-    if (result === null || result === undefined) return null;
-    return normalizeTags(result);
+    if (!result) return null;
+    const { tags, features, moved } = classifyRequirements(result.tags, result.features);
+    if (moved.length) {
+      ui.notifications.warn(game.i18n.format(cell ? "WFC.Markers.NotAFeatureCell" : "WFC.Markers.NotAFeature", { entries: moved.join(", "), types: FEATURE_NAMES.join(", ") }));
+    }
+    return { tags: cell ? [] : tags, features };
   }
 }

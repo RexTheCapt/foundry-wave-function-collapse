@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- Edge markers have separate side tags and door features again. The features field only accepts
+  door types; other entries become side tags with a notice. Markers saved by 0.4.1 are migrated.
+
 ## 0.4.1
 
 - Edge markers no longer distinguish tags from door features. A marker lists what must be on the
