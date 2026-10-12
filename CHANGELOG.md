@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Empty areas became zones with two types: floor-only zones (open tags inside, border tags around,
+  one big open room) and no-tile zones (blank). The zone prompt asks for the tags, prefilled with
+  floor and wall. Edge markers on a zone border take priority. Existing empty areas are migrated.
+- The tile picker honours zone rules.
+
 ## 0.5.0
 
 - Empty areas: outline areas that must stay blank. They are saved with the scene, drawn in red,

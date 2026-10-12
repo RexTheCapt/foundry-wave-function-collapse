@@ -10,7 +10,7 @@ import { MODULE_ID } from "./constants.js";
 import { edgeKey, edgeEndpoints, cellMarkerKey, markerTargetAtPoint, edgesAlongLine } from "./lib/edges.js";
 import { normalizeTags, DOOR_FEATURES } from "./lib/wfc.js";
 import { log } from "./log.js";
-import { getEmptyAreas } from "./areas.js";
+import { getZones } from "./zones.js";
 
 const FLAG_PATH = `flags.${MODULE_ID}.edgeMarkers`;
 
@@ -119,26 +119,34 @@ export class MarkerLayer {
     container.eventMode = "none";
     const g = new PIXI.Graphics();
     container.addChild(g);
-    // Empty areas: hatched red polygons.
-    const areas = getEmptyAreas();
-    for (const poly of areas) {
-      g.lineStyle(3, 0xe63946, 0.9);
-      g.beginFill(0xe63946, 0.12);
+    // Zones: no-tile zones hatched in red, floor-only zones filled in green with their tags.
+    const zones = getZones();
+    const zoneLabels = [];
+    for (const z of zones) {
+      const poly = z.polygon;
+      const color = z.type === "empty" ? 0xe63946 : 0x3ddc84;
+      g.lineStyle(3, color, 0.9);
+      g.beginFill(color, z.type === "empty" ? 0.12 : 0.1);
       g.drawPolygon(poly.flat());
       g.endFill();
-      g.lineStyle(1, 0xe63946, 0.35);
       const xs = poly.map(pt => pt[0]);
       const ys = poly.map(pt => pt[1]);
       const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-      const step = Math.max(16, size / 4);
-      for (let d = minX - (maxY - minY); d < maxX; d += step) {
-        // Diagonal hatch lines clipped roughly to the bounding box; the fill shows the exact shape.
-        const x1 = Math.max(minX, d), y1 = minY + (x1 - d);
-        const x2 = Math.min(maxX, d + (maxY - minY)), y2 = minY + (x2 - d);
-        if (x2 <= x1) continue;
-        g.moveTo(x1, y1);
-        g.lineTo(x2, y2);
+      if (z.type === "empty") {
+        g.lineStyle(1, color, 0.35);
+        const step = Math.max(16, size / 4);
+        for (let d = minX - (maxY - minY); d < maxX; d += step) {
+          const x1 = Math.max(minX, d), y1 = minY + (x1 - d);
+          const x2 = Math.min(maxX, d + (maxY - minY)), y2 = minY + (x2 - d);
+          if (x2 <= x1) continue;
+          g.moveTo(x1, y1);
+          g.lineTo(x2, y2);
+        }
       }
+      const text = z.type === "empty"
+        ? game.i18n.localize("WFC.Zones.Empty")
+        : `${game.i18n.localize("WFC.Zones.Open")}: ${z.tags.join(", ") || "*"} / ${z.border.join(", ") || "*"}`;
+      zoneLabels.push({ text, x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
     }
     const style = {
       fontFamily: "Signika, sans-serif",
@@ -171,10 +179,17 @@ export class MarkerLayer {
       label.resolution = 2;
       container.addChild(label);
     }
+    for (const zl of zoneLabels) {
+      const label = new PIXI.Text(zl.text, { ...style, fontSize: Math.max(12, size * 0.2) });
+      label.anchor.set(0.5);
+      label.position.set(zl.x, zl.y);
+      label.resolution = 2;
+      container.addChild(label);
+    }
     const parent = canvas.controls ?? canvas.interface ?? canvas.stage;
     parent.addChild(container);
     this.container = container;
-    log.debug(`marker layer drew ${markers.length} markers and ${areas.length} empty areas`);
+    log.debug(`marker layer drew ${markers.length} markers and ${zones.length} zones`);
   }
 }
 

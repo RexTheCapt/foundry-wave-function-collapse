@@ -21,8 +21,8 @@ off the outline.
   replaced, tiles around it stay and constrain the new ones, walls are clipped at the border.
 - **Markers**: pin required tags or a door to a cell edge, or require a door inside a cell, then
   restrict doors to marked places only.
-- **Empty areas**: draw areas that must stay blank. The generator walls them off like the outside,
-  unless an edge marker on their border says otherwise.
+- **Zones**: draw a floor-only zone to get one big open room walled around, or a no-tile zone that
+  stays blank. Edge markers on a zone border take priority, so doors go where you mark them.
 - **Tile picker**: click a cell and choose by hand among the tiles the solver would allow there.
 - Rotation support, weights, seeds for reproducible layouts, and a sample collection to start with.
 
@@ -96,22 +96,27 @@ Select **Door and edge markers (WFC)** in the Tiles controls.
 - Shift-click repeats the last marker, right-click removes one. Markers are saved with the scene and
   drawn in green while the Tiles controls are open.
 
-### Empty areas
+### Zones
 
-Select **Empty areas (WFC)** and outline an area the same way as a dungeon outline. Cells inside it
-are never filled: the generator treats them as outside, removes anything it placed there before,
-puts walls along their border and applies the boundary tags to the tiles around them. An edge
-marker on that border takes priority over the boundary tags, so a door marker opens a doorway into
-the empty area. Right-click inside an area to remove it, or clear them all from the
-"Remove generated dungeon" dialog. Areas are saved with the scene and drawn in red while the Tiles
-controls are open.
+Select **Zones (WFC)** and outline an area the same way as a dungeon outline. When you close it, a
+prompt asks which kind of zone it is:
+
+- **Floor only**: every edge between two cells of the zone must carry the *open tags* (default
+  `floor`) and every edge around the zone the *border tags* (default `wall`). The result is one
+  open room with walls around it. Leave the border tags empty to let the generator decide.
+- **No tiles**: the zone stays blank. The generator treats it as outside, removes anything it placed
+  there before, puts walls along its border and applies the boundary tags to the tiles around it.
+
+Edge markers on a zone border take priority over the zone's border tags and the boundary tags, so
+a `door` marker opens a doorway into or out of the zone. Right-click inside a zone to remove it, or
+clear them all from the "Remove generated dungeon" dialog. Zones are saved with the scene and drawn
+while the Tiles controls are open: green for floor-only, red hatched for no-tile.
 
 ### Tile picker
 
 Select **Tile picker (WFC)** and click a cell. A window lists the tile variants (including
 rotations) that fit that cell under the solver's rules: compatible with the generated tiles around
-it, respecting markers on its edges, empty areas next to it and the last "Only where marked"
-setting. Click a tile to place it; walls are created and clipped exactly as during generation.
+it, respecting markers on its edges, zones and the last "Only where marked" setting. Click a tile to place it; walls are created and clipped exactly as during generation.
 "Show all tiles" lists every variant with the blocked ones dimmed, in case you want to override the
 rules on purpose.
 
@@ -219,7 +224,7 @@ and `door` with thin centered walls, including a door across the middle of a cor
 
 - `generateDungeon({ polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls })`
 - `clearGenerated("last" | "all")`
-- `getMarkers()`, `clearMarkers()`, `getEmptyAreas()` and `clearEmptyAreas()` for the current scene.
+- `getMarkers()`, `clearMarkers()`, `getZones()` and `clearZones()` for the current scene.
 - `candidatesForCell(cell, collectionDirs)` and `placeTileAt(cell, variant)` for manual placement.
 - `openCollections()`
 - `wfc` and `geometry`, the pure solver and grid helpers.

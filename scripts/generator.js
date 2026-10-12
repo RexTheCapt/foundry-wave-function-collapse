@@ -8,7 +8,8 @@ import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFe
 import { edgeCellSides, cellSideEdge, edgeKey, cellMarkerKey } from "./lib/edges.js";
 import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
 import { getMarkers } from "./markers.js";
-import { getEmptyAreas } from "./areas.js";
+import { getEmptyAreas, getZones } from "./zones.js";
+import { zoneSideRule, zoneAtCell } from "./lib/zones.js";
 import { log } from "./log.js";
 
 export function assertSquareGrid() {
@@ -169,6 +170,29 @@ export async function generateDungeon({
   const markers = getMarkers(scene);
   const shared = [];
   let appliedMarkers = 0;
+  // Sides touched by an edge marker: zone rules step aside there.
+  const markedSides = new Set();
+  for (const m of markers) {
+    if (m.kind !== "edge") continue;
+    for (const { cell, side } of edgeCellSides(m, size)) {
+      const k = cellIndex.get(cellKey(cell.i, cell.j));
+      if (k !== undefined) markedSides.add(`${k}:${side}`);
+    }
+  }
+  // Floor-only zones: open tags inside, border tags around, unless a marker dictates the edge.
+  const zones = getZones(scene);
+  let zoneSides = 0;
+  cells.forEach((cell, k) => {
+    for (const side of SIDES) {
+      if (markedSides.has(`${k}:${side}`)) continue;
+      const rule = zoneSideRule(zones, cell, side, size);
+      if (!rule) continue;
+      const c = ensure(k, side);
+      c.require = rule.require;
+      delete c.compatibleWith;
+      zoneSides++;
+    }
+  });
   for (const m of markers) {
     if (m.kind === "cell") {
       const k = cellIndex.get(cellKey(m.i, m.j));
@@ -212,7 +236,7 @@ export async function generateDungeon({
       c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), feature]);
     }
   }
-  log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${appliedMarkers}/${markers.length} markers inside the outline, ${shared.length} shared edge requirements`);
+  log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${zoneSides} sides ruled by ${zones.length} zones, ${appliedMarkers}/${markers.length} markers inside the outline, ${shared.length} shared edge requirements`);
 
   const started = performance.now();
   const result = solve({ cells, variants, boundaryTags, compatible, constraints, shared, seed: String(seed) });
@@ -402,6 +426,7 @@ export async function candidatesForCell(cell, collectionDirs, { restrictedTags =
     ensure(CENTER).requireFeatures = cellMarker.features;
     ensure(CENTER).forbidFeatures = without(constraints[CENTER].forbidFeatures, cellMarker.features);
   }
+  const zones = getZones(scene);
   for (const side of SIDES) {
     const [di, dj] = DELTAS[side];
     const neighborCell = { i: cell.i + di, j: cell.j + dj };
@@ -410,7 +435,11 @@ export async function candidatesForCell(cell, collectionDirs, { restrictedTags =
     const neighbor = inVoid ? null : existing.get(cellKey(neighborCell.i, neighborCell.j));
     if (neighbor) ensure(side).compatibleWith = neighbor.tags[OPPOSITE[side]];
     const m = edgeMarkers.get(edgeKey(cellSideEdge(cell, side, size)));
-    if (!m) continue;
+    if (!m) {
+      const rule = zoneSideRule(zones, cell, side, size);
+      if (rule) { ensure(side).require = rule.require; delete constraints[side].compatibleWith; }
+      continue;
+    }
     const c = ensure(side);
     c.forbid = without(c.forbid, m.tags);
     c.forbidFeatures = without(c.forbidFeatures, m.features);

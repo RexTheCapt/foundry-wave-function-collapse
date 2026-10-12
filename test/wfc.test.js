@@ -362,3 +362,29 @@ test("allowedVariants filters a single cell like the solver does", () => {
   assert.ok(doors.length > 0 && doors.every(v => v.features.c.includes("door")));
   assert.equal(allowedVariants(variants, { n: { require: ["nothing"] } }, null).length, 0);
 });
+
+test("a floor-only zone solves to an open room with walls around it", async () => {
+  const { zoneSideRule } = await import("../scripts/lib/zones.js");
+  const cells = cellsInPolygon([[0, 0], [600, 0], [600, 500], [0, 500]], 100);
+  const variants = expandVariants(sampleTiles);
+  const zones = [{ type: "open", polygon: [[100, 100], [500, 100], [500, 400], [100, 400]], tags: ["floor"], border: ["wall"] }];
+  const constraints = cells.map(cell => {
+    const c = {};
+    for (const side of SIDES) {
+      const rule = zoneSideRule(zones, cell, side, 100);
+      if (rule) c[side] = { require: rule.require };
+    }
+    return c;
+  });
+  const r = sampleSolve({ cells, variants, boundaryTags: ["wall"], constraints, seed: "room" });
+  assert.ok(r.success, r.failure?.stage);
+  assertConsistent(r, cells);
+  for (const a of r.assignments) {
+    const inside = a.cell.i >= 1 && a.cell.i <= 3 && a.cell.j >= 1 && a.cell.j <= 4;
+    if (!inside) continue;
+    for (const side of SIDES) {
+      const rule = zoneSideRule(zones, a.cell, side, 100);
+      assert.deepEqual(a.variant.tags[side], rule.require, `cell ${a.cell.j},${a.cell.i} ${side}`);
+    }
+  }
+});
