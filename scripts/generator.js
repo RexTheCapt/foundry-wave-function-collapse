@@ -4,7 +4,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { cellsInPolygonExcluding, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
-import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, describeCellConstraints, allowedVariants, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
+import { expandVariants, solve, normalizeTags, normalizeSideTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, describeCellConstraints, allowedVariants, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
 import { edgeCellSides, cellSideEdge, edgeKey, cellMarkerKey } from "./lib/edges.js";
 import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
 import { getMarkers } from "./markers.js";
@@ -67,7 +67,7 @@ async function existingTiles(scene, size) {
     let features = null;
     if (flags.tags) {
       tags = {};
-      for (const side of SIDES) tags[side] = normalizeTags(flags.tags[side]);
+      for (const side of SIDES) tags[side] = normalizeSideTags(flags.tags[side]);
       features = {};
       for (const place of [...SIDES, CENTER]) features[place] = normalizeTags(flags.features?.[place]);
     } else if (flags.tile) {

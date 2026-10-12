@@ -9,7 +9,8 @@
  *   "compatible": { "wall": ["floor"] }, // optional: which differing tags may face each other
  *   "tiles": {
  *     "floor.png": {                   // file name, relative to the collection directory
- *       "tags": { "n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"] },
+ *       "tags": { "n": ["floor"], "e": [["floor"], ["wall"]], "s": ["floor"], "w": ["floor"] },
+ *                                     // a side is one tag set, or several alternative sets
  *       "walls": [ { "c": [0, 0, 1, 0], "door": 0 } ],   // normalized 0..1 tile coordinates
  *       "weight": 1,
  *       "rotate": false
@@ -18,7 +19,7 @@
  * }
  */
 
-import { SIDES, normalizeTags, normalizeTile } from "./wfc.js";
+import { SIDES, normalizeTags, normalizeTile, sideTagsToText } from "./wfc.js";
 
 export const MAPPING_VERSION = 1;
 
@@ -94,5 +95,8 @@ export function compatibleFromText(text) {
 
 /** Short human readable summary of a tile's side tags, e.g. "N floor · E wall · S floor · W wall". */
 export function describeTags(tags) {
-  return SIDES.map(s => `${s.toUpperCase()} ${tags[s]?.length ? tags[s].join(",") : "—"}`).join(" · ");
+  return SIDES.map(s => {
+    const text = sideTagsToText(tags[s]);
+    return `${s.toUpperCase()} ${text || "—"}`;
+  }).join(" · ");
 }

@@ -1,6 +1,6 @@
 import { MODULE_ID, TEMPLATES } from "../constants.js";
 import { normalizeTileEntry } from "../lib/mapping.js";
-import { SIDES, normalizeTags } from "../lib/wfc.js";
+import { SIDES, normalizeSideTags, sideTagsToText } from "../lib/wfc.js";
 import { distanceToSegment } from "../lib/geometry.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -16,7 +16,7 @@ export class TileEditor extends HandlebarsApplicationMixin(ApplicationV2) {
     classes: ["wfc-app", "wfc-tile-editor"],
     tag: "form",
     window: { title: "WFC.Tile.Title", icon: "fa-solid fa-vector-square", resizable: false },
-    position: { width: 760, height: "auto" },
+    position: { width: 820, height: "auto" },
     form: { handler: TileEditor.#onSubmit, submitOnChange: false, closeOnSubmit: true },
     actions: {
       clearWalls: TileEditor.#onClearWalls,
@@ -54,7 +54,7 @@ export class TileEditor extends HandlebarsApplicationMixin(ApplicationV2) {
     return {
       file: this.file,
       src: `${this.dir}/${this.file}`,
-      tags: Object.fromEntries(SIDES.map(s => [s, this.entry.tags[s].join(", ")])),
+      tags: Object.fromEntries(SIDES.map(s => [s, sideTagsToText(this.entry.tags[s])])),
       weight: this.entry.weight,
       rotate: this.entry.rotate,
       canvasSize: CANVAS_SIZE,
@@ -202,7 +202,7 @@ export class TileEditor extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static async #onSubmit(event, form) {
     const tags = {};
-    for (const side of SIDES) tags[side] = normalizeTags(form.elements[`tags.${side}`].value);
+    for (const side of SIDES) tags[side] = normalizeSideTags(form.elements[`tags.${side}`].value);
     const entry = normalizeTileEntry({
       tags,
       walls: this.walls,

@@ -146,6 +146,12 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 - A collection can declare **compatible tags** so that differing tags may face each other, for
   example `wall: floor` for art where only one tile draws the wall. A tag listed on the left stops
   matching itself unless it lists itself.
+- A side can offer **alternative** tag sets separated by `|`, for example `floor | wall` on a
+  plain floor tile so it also fits against a wall drawn by the neighbour. The side matches when
+  any of its alternatives matches any alternative of the other side. Internally each combination
+  of alternatives becomes its own variant with the tile's full weight, so keep the number of
+  alternatives small. In `mapping.json` a side with alternatives is an array of arrays:
+  `"e": [["floor"], ["wall"]]`.
 - An empty tag set only matches another empty tag set.
 - The wildcard `*` matches anything.
 - When a tile allows rotation, its tags and walls rotate with it (clockwise: north becomes east).

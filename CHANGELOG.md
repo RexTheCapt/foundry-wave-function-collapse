@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Tile sides can list alternative tag sets separated by `|` (for example `floor | wall`), in the
+  tile editor and in `mapping.json` as nested arrays. Each combination becomes its own variant,
+  so markers, surroundings and compatibility rules stay exact.
+- Fixed text overflowing the right column of the tile editor.
+
 ## 0.6.0
 
 - Empty areas became zones with two types: floor-only zones (open tags inside, border tags around,

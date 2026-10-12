@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, describeCellConstraints, allowedVariants, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
+import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, describeCellConstraints, allowedVariants, normalizeSideTags, sideTagsToText, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
 import { normalizeMapping } from "../scripts/lib/mapping.js";
 import { cellsInPolygon } from "../scripts/lib/geometry.js";
 
@@ -387,4 +387,43 @@ test("a floor-only zone solves to an open room with walls around it", async () =
       assert.deepEqual(a.variant.tags[side], rule.require, `cell ${a.cell.j},${a.cell.i} ${side}`);
     }
   }
+});
+
+test("sides can offer alternative tag sets", () => {
+  assert.deepEqual(normalizeSideTags("floor | wall"), [["floor"], ["wall"]]);
+  assert.deepEqual(normalizeSideTags("floor, rubble | wall"), [["floor", "rubble"], ["wall"]]);
+  assert.deepEqual(normalizeSideTags("floor"), ["floor"]);
+  assert.deepEqual(normalizeSideTags(["floor"]), ["floor"]);
+  assert.deepEqual(normalizeSideTags([["floor"], ["wall"], ["floor"]]), [["floor"], ["wall"]]);
+  assert.deepEqual(normalizeSideTags("floor |"), ["floor"]);
+  assert.deepEqual(normalizeSideTags(""), []);
+  assert.equal(sideTagsToText([["floor", "rubble"], ["wall"]]), "floor, rubble | wall");
+  assert.equal(sideTagsToText(["wall"]), "wall");
+  assert.ok(tagsMatch([["floor"], ["wall"]], ["wall"]));
+  assert.ok(tagsMatch(["wall"], [["floor"], ["wall"]]));
+  assert.ok(!tagsMatch([["floor"], ["wall"]], ["door"]));
+  assert.ok(tagsMatch([["floor"], ["wall"]], [["door"], ["floor"]]));
+  const compat = buildCompatibility({ wall: ["floor"] });
+  assert.ok(tagsMatch([["door"], ["wall"]], ["floor"], compat));
+});
+
+test("a floor tile with floor|wall sides sits next to walls without a compatibility table", () => {
+  const anyFloor = normalizeTile({ id: "any", tags: { n: "floor | wall", e: "floor | wall", s: "floor | wall", w: "floor | wall" }, weight: 1 });
+  const wallTop = normalizeTile({ id: "top", tags: { n: ["wall"], e: ["floor"], s: ["floor"], w: ["floor"] }, walls: [{ c: [0, 0, 1, 0], door: 0 }], rotate: true });
+  const variants = expandVariants([anyFloor, wallTop]);
+  // 2^4 side combinations for the any-floor tile plus four rotations of the wall tile.
+  assert.equal(variants.length, 20);
+  assert.ok(variants.every(v => SIDES.every(side => typeof v.tags[side][0] !== "object")));
+  const cells = cellsInPolygon([[0, 0], [300, 0], [300, 100], [0, 100]], 100);
+  const constraints = [{ e: { require: ["wall"] } }, { n: { require: ["floor"] }, s: { require: ["floor"] } }, { w: { require: ["wall"] } }];
+  const r = solve({ cells, variants, constraints, seed: 1 });
+  assert.ok(r.success);
+  assert.equal(r.assignments[1].variant.tile.id, "any");
+  assert.deepEqual(r.assignments[0].variant.tags.e, ["wall"]);
+  assert.deepEqual(r.assignments[2].variant.tags.w, ["wall"]);
+  const cw = allowedVariants(variants, { n: { compatibleWith: [["floor"], ["wall"]] } }, null);
+  assert.equal(cw.length, 20);
+  const forbid = allowedVariants(variants, { n: { forbid: ["wall"] } }, null);
+  assert.ok(forbid.some(v => v.tile.id === "any"));
+  assert.ok(!forbid.some(v => v.tile.id === "top" && v.rotation === 0));
 });

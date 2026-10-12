@@ -79,7 +79,7 @@
     },
     "Tile": {
       "Title": "Tile",
-      "TagsHint": "Comma separated tags per side. Two tiles may touch only when the tag sets on the shared side are identical, or compatible according to the collection's compatible tags. Use * to match anything.",
+      "TagsHint": "Comma separated tags per side. Two tiles may touch only when the tag sets on the shared side are identical, or compatible according to the collection's compatible tags. Separate alternative sets with |, e.g. \"floor | wall\" fits next to a floor side or a wall side. Use * to match anything.",
       "North": "North tags",
       "East": "East tags",
       "South": "South tags",

@@ -107,15 +107,69 @@ export function tagCompatible(x, y, compat = null) {
 }
 
 /**
- * Two normalized tag lists match when every tag on each side is compatible with a tag on the
+ * A side's tags are either one tag set (array of strings) or several alternative sets (array of
+ * arrays). This returns the list of alternatives in either case.
+ * @param {string[]|string[][]} tags
+ * @returns {string[][]}
+ */
+export function sideAlternatives(tags) {
+  if (!Array.isArray(tags)) return [[]];
+  return tags.length && Array.isArray(tags[0]) ? tags : [tags];
+}
+
+/**
+ * Normalize a side's tags from mapping.json or the editor. Accepts a string such as
+ * "floor | wall, rubble" (alternatives separated by "|", tags by ","), a flat array (one set) or
+ * an array of arrays (alternatives). Returns a flat array for a single set and an array of
+ * arrays for several alternatives.
+ * @param {string|string[]|string[][]|null|undefined} raw
+ * @returns {string[]|string[][]}
+ */
+export function normalizeSideTags(raw) {
+  let alternatives;
+  if (raw === null || raw === undefined) alternatives = [[]];
+  else if (typeof raw === "string") alternatives = raw.split("|").map(normalizeTags);
+  else if (Array.isArray(raw)) {
+    if (raw.some(Array.isArray)) alternatives = raw.map(normalizeTags);
+    else if (raw.some(x => String(x).includes("|"))) alternatives = raw.join(",").split("|").map(normalizeTags);
+    else alternatives = [normalizeTags(raw)];
+  } else alternatives = [[]];
+  const seen = new Set();
+  const unique = [];
+  for (const alt of alternatives) {
+    const key = alt.join("\u0001");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(alt);
+  }
+  const nonEmpty = unique.filter(a => a.length);
+  const out = nonEmpty.length ? nonEmpty : [[]];
+  return out.length === 1 ? out[0] : out;
+}
+
+/** Editor text for a side's tags: alternatives joined with " | ". */
+export function sideTagsToText(tags) {
+  return sideAlternatives(tags).map(a => a.join(", ")).join(" | ");
+}
+
+/**
+ * Two sides match when any alternative set of one is compatible with any alternative set of the
+ * other. Two sets are compatible when every tag on each side is compatible with a tag on the
  * other side, or when either contains the wildcard. Without a compatibility table this is set
  * equality.
- * @param {string[]} a
- * @param {string[]} b
+ * @param {string[]|string[][]} a
+ * @param {string[]|string[][]} b
  * @param {{pairs: Map<string, Set<string>>, explicit: Set<string>}|null} [compat]
  * @returns {boolean}
  */
 export function tagsMatch(a, b, compat = null) {
+  for (const x of sideAlternatives(a)) {
+    for (const y of sideAlternatives(b)) if (setsMatch(x, y, compat)) return true;
+  }
+  return false;
+}
+
+function setsMatch(a, b, compat) {
   if (a.includes(WILDCARD) || b.includes(WILDCARD)) return true;
   if (!compat || !compat.pairs.size) {
     if (a.length !== b.length) return false;
@@ -151,7 +205,7 @@ export function rotatePoint([x, y], rotation) {
  */
 export function normalizeTile(raw) {
   const tags = {};
-  for (const side of SIDES) tags[side] = normalizeTags(raw.tags?.[side]);
+  for (const side of SIDES) tags[side] = normalizeSideTags(raw.tags?.[side]);
   const walls = [];
   for (const w of raw.walls ?? []) {
     const c = Array.isArray(w) ? w : w?.c;
@@ -196,12 +250,14 @@ function variantSignature(v) {
     .map(w => `${w.door}:${w.c.map(n => Math.round(n * 1000) / 1000).join(",")}`)
     .sort()
     .join(";");
-  return `${SIDES.map(s => v.tags[s].join("|")).join("/")}#${walls}`;
+  return `${SIDES.map(s => sideAlternatives(v.tags[s]).map(a => a.join("|")).join("||")).join("/")}#${walls}`;
 }
 
 /**
- * Expand tiles into rotation variants. Rotations that produce an identical variant
- * (for symmetric tiles) are dropped so the tile does not become more likely than intended.
+ * Expand tiles into variants: one per rotation and per combination of the alternative tag sets
+ * of its sides, so every variant has exactly one tag set per side. Combinations that produce an
+ * identical variant (for symmetric tiles) are dropped so the tile does not become more likely
+ * than intended. Each variant keeps the tile's full weight.
  * @param {ReturnType<typeof normalizeTile>[]} tiles
  */
 export function expandVariants(tiles) {
@@ -211,10 +267,18 @@ export function expandVariants(tiles) {
     const seen = new Set();
     for (const r of rotations) {
       const v = rotateTile(tile, r);
-      const sig = variantSignature(v);
-      if (seen.has(sig)) continue;
-      seen.add(sig);
-      variants.push({ tile, rotation: v.rotation, tags: v.tags, walls: v.walls, features: tileFeatures(v.walls), weight: tile.weight });
+      const features = tileFeatures(v.walls);
+      const alternatives = SIDES.map(side => sideAlternatives(v.tags[side]));
+      const combos = alternatives.reduce((acc, alts) => acc.flatMap(prefix => alts.map(alt => [...prefix, alt])), [[]]);
+      for (const combo of combos) {
+        const tags = {};
+        SIDES.forEach((side, k) => { tags[side] = combo[k]; });
+        const candidate = { tile, rotation: v.rotation, tags, walls: v.walls, features, weight: tile.weight };
+        const sig = variantSignature(candidate);
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        variants.push(candidate);
+      }
     }
   }
   return variants;
@@ -254,7 +318,7 @@ const PLACES = [...SIDES, CENTER];
 function placeTest(place, c, compatTable, boundary) {
   const dictated = c?.compatibleWith || c?.require || c?.requireFeatures?.length || c?.requireAny?.length;
   const require = c?.require ? normalizeTags(c.require) : (boundary?.length && !dictated ? normalizeTags(boundary) : null);
-  const compatibleWith = c?.compatibleWith ? normalizeTags(c.compatibleWith) : null;
+  const compatibleWith = c?.compatibleWith ? normalizeSideTags(c.compatibleWith) : null;
   const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
   const requireFeatures = c?.requireFeatures?.length ? normalizeTags(c.requireFeatures) : null;
   const forbidFeatures = c?.forbidFeatures?.length ? normalizeTags(c.forbidFeatures) : null;
@@ -269,7 +333,7 @@ function placeTest(place, c, compatTable, boundary) {
     const tags = v.tags[place];
     if (require && !tagsMatch(tags, require)) return false;
     if (compatibleWith && !tagsMatch(tags, compatibleWith, compatTable)) return false;
-    if (forbid && tags.some(t => forbid.includes(t))) return false;
+    if (forbid && sideAlternatives(tags).every(alt => alt.some(t => forbid.includes(t)))) return false;
     return true;
   };
 }
@@ -427,8 +491,8 @@ export function describeCellConstraints(cellConstraints, variants, compatible = 
     const require = c.require ? normalizeTags(c.require) : (open && boundary.length ? boundary : null);
     if (require) lines.push(`${name} must be exactly [${require}] (${count(v => tagsMatch(v.tags[place], require))} variants)`);
     if (c.compatibleWith) {
-      const cw = normalizeTags(c.compatibleWith);
-      lines.push(`${name} must be compatible with [${cw}] (${count(v => tagsMatch(v.tags[place], cw, compat))} variants)`);
+      const cw = normalizeSideTags(c.compatibleWith);
+      lines.push(`${name} must be compatible with [${sideTagsToText(cw)}] (${count(v => tagsMatch(v.tags[place], cw, compat))} variants)`);
     }
     if (c.forbid?.length) lines.push(`${name} must not have tags [${normalizeTags(c.forbid)}]`);
     if (c.requireFeatures?.length) {

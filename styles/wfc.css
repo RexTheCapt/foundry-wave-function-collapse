@@ -29,7 +29,11 @@
 .wfc-tile-actions button { width: auto; line-height: 1.5; padding: 0.1rem 0.45rem; }
 
 /* Tile editor */
-.wfc-tile-editor-grid { display: grid; grid-template-columns: 360px 1fr; gap: 1rem; }
+.wfc-tile-editor-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 1rem; }
+.wfc-tile-editor-grid > * { min-width: 0; }
+.wfc-tile-fields .form-group, .wfc-tile-fields .form-fields { min-width: 0; }
+.wfc-tile-fields input[type=text], .wfc-tile-fields input[type=number] { min-width: 0; width: 100%; }
+.wfc-app .hint, .wfc-app .wfc-dir, .wfc-app .wfc-meta, .wfc-app .wfc-tags { overflow-wrap: anywhere; }
 .wfc-wall-editor { display: flex; flex-direction: column; gap: 0.4rem; }
 .wfc-wall-editor canvas { width: 360px; height: 360px; cursor: crosshair; border: 1px solid rgba(0,0,0,0.5); background: #222; touch-action: none; }
 .wfc-tile-fields { display: flex; flex-direction: column; gap: 0.4rem; }
