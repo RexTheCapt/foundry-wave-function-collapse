@@ -14,18 +14,19 @@ import { log } from "./log.js";
 const FLAG_PATH = `flags.${MODULE_ID}.edgeMarkers`;
 
 function normalizeMarker(m) {
-  const tags = normalizeTags(m.tags);
-  const features = normalizeTags(m.features);
+  // Older markers stored separate tags and features; both are plain requirements now.
+  const requirements = normalizeTags([...(m.requirements ?? []), ...(m.tags ?? []), ...(m.features ?? [])]);
+  if (!requirements.length) return null;
   if (m.kind === "cell") {
     const i = Number(m.i);
     const j = Number(m.j);
-    if (!Number.isInteger(i) || !Number.isInteger(j) || !features.length) return null;
-    return { kind: "cell", i, j, features };
+    if (!Number.isInteger(i) || !Number.isInteger(j)) return null;
+    return { kind: "cell", i, j, requirements };
   }
   const x = Number(m.x);
   const y = Number(m.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || (!tags.length && !features.length)) return null;
-  return { kind: "edge", x, y, dir: m.dir === "v" ? "v" : "h", tags, features };
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { kind: "edge", x, y, dir: m.dir === "v" ? "v" : "h", requirements };
 }
 
 export function markerKey(m) {
@@ -45,12 +46,12 @@ export async function setMarkers(markers, scene = canvas.scene) {
 }
 
 /**
- * Set the marker on a target. Empty tags and features remove it.
+ * Set the marker on a target. Empty requirements remove it.
  * @param {{kind: "edge", x, y, dir}|{kind: "cell", i, j}} target
- * @param {{tags?: string[]|string, features?: string[]|string}} data
+ * @param {string[]|string} requirements
  */
-export async function setMarker(target, data, scene = canvas.scene) {
-  const marker = normalizeMarker({ ...target, tags: data.tags, features: data.features });
+export async function setMarker(target, requirements, scene = canvas.scene) {
+  const marker = normalizeMarker({ ...target, requirements: normalizeTags(requirements) });
   const key = markerKey(target);
   const list = getMarkers(scene).filter(m => markerKey(m) !== key);
   if (marker) list.push(marker);
@@ -62,10 +63,7 @@ export async function clearMarkers(scene = canvas.scene) {
 }
 
 function markerLabel(m) {
-  const parts = [];
-  if (m.tags?.length) parts.push(m.tags.join(", "));
-  if (m.features?.length) parts.push(m.features.map(f => `[${f}]`).join(" "));
-  return parts.join(" ");
+  return m.requirements.join(", ");
 }
 
 /** Draws the markers of the current scene on the canvas. */
@@ -159,7 +157,7 @@ export class MarkerTool {
 
   get last() {
     const v = game.settings.get(MODULE_ID, "lastMarker") ?? {};
-    return { tags: normalizeTags(v.tags), features: normalizeTags(v.features) };
+    return normalizeTags([...(normalizeTags(v.requirements)), ...normalizeTags(v.tags), ...normalizeTags(v.features)]);
   }
 
   activate() {
@@ -240,25 +238,19 @@ export class MarkerTool {
       }
       const single = targets.length === 1 ? targets[0] : null;
       const existing = single ? existingFor(single) : null;
-      const last = this.last;
       const kind = targets[0].kind;
-      let data;
+      let requirements;
       if (drag.shift && !existing) {
-        data = kind === "cell" ? { tags: [], features: last.features } : last;
-        if (!data.tags?.length && !data.features.length) return;
+        requirements = this.last;
+        if (!requirements.length) return;
       } else {
-        const initial = existing ?? (kind === "cell" ? { features: last.features } : last);
-        data = await MarkerTool.prompt(kind, initial);
-        if (!data) return;
-        if (data.tags.length || data.features.length) {
-          await game.settings.set(MODULE_ID, "lastMarker", { tags: data.tags.join(", "), features: data.features.join(", ") });
-        }
+        requirements = await MarkerTool.prompt(kind, existing?.requirements ?? this.last);
+        if (requirements === null) return;
+        if (requirements.length) await game.settings.set(MODULE_ID, "lastMarker", { requirements: requirements.join(", ") });
       }
       const keys = new Set(targets.map(markerKey));
       const kept = markers.filter(m => !keys.has(markerKey(m)));
-      const added = (data.tags?.length || data.features.length)
-        ? targets.map(t => ({ ...t, tags: data.tags ?? [], features: data.features })).map(m => ({ ...m }))
-        : [];
+      const added = requirements.length ? targets.map(t => ({ ...t, requirements })) : [];
       await setMarkers([...kept, ...added]);
     } catch (err) {
       log.error("marker tool failed", err);
@@ -288,32 +280,26 @@ export class MarkerTool {
     this.preview = null;
   }
 
-  /** Ask for marker contents. Resolves with { tags, features }, or null when cancelled. */
-  static async prompt(kind, initial = {}) {
+  /** Ask for marker requirements. Resolves with a normalized list, or null when cancelled. */
+  static async prompt(kind, initial = []) {
     const esc = v => foundry.utils.escapeHTML(String(v ?? ""));
-    const tagsRow = kind === "edge" ? `<div class="form-group">
-        <label>${game.i18n.localize("WFC.Markers.Tags")}</label>
-        <div class="form-fields"><input type="text" name="tags" value="${esc((initial.tags ?? []).join(", "))}" autofocus></div>
-        <p class="hint">${game.i18n.localize("WFC.Markers.TagsHint")}</p></div>` : "";
-    const content = `${tagsRow}<div class="form-group">
-        <label>${game.i18n.localize("WFC.Markers.Features")}</label>
-        <div class="form-fields"><input type="text" name="features" value="${esc((initial.features ?? []).join(", "))}" ${kind === "cell" ? "autofocus" : ""}></div>
-        <p class="hint">${game.i18n.localize(kind === "cell" ? "WFC.Markers.CellFeaturesHint" : "WFC.Markers.FeaturesHint")}</p></div>
+    const cell = kind === "cell";
+    const content = `<div class="form-group">
+        <label>${game.i18n.localize(cell ? "WFC.Markers.CellRequirements" : "WFC.Markers.Requirements")}</label>
+        <div class="form-fields"><input type="text" name="requirements" value="${esc(initial.join(", "))}" placeholder="${cell ? "door" : "wall"}" autofocus></div>
+        <p class="hint">${game.i18n.localize(cell ? "WFC.Markers.CellRequirementsHint" : "WFC.Markers.RequirementsHint")}</p></div>
       <p class="hint">${game.i18n.localize("WFC.Markers.EmptyHint")}</p>`;
     const result = await foundry.applications.api.DialogV2.prompt({
-      window: { title: game.i18n.localize(kind === "cell" ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-draw-polygon" },
+      window: { title: game.i18n.localize(cell ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-draw-polygon" },
       content,
       ok: {
         label: game.i18n.localize("WFC.Markers.Set"),
         icon: "fa-solid fa-check",
-        callback: (event, button) => ({
-          tags: button.form.elements.tags?.value ?? "",
-          features: button.form.elements.features?.value ?? ""
-        })
+        callback: (event, button) => button.form.elements.requirements.value
       },
       rejectClose: false
     });
-    if (!result) return null;
-    return { tags: normalizeTags(result.tags), features: normalizeTags(result.features) };
+    if (result === null || result === undefined) return null;
+    return normalizeTags(result);
   }
 }

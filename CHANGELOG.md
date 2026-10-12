@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+- Edge markers no longer distinguish tags from door features. A marker lists what must be on the
+  edge (`wall`, `door`, ...) and is satisfied by a side tag or a drawn door of that name. Existing
+  markers are migrated. A marker asking for `wall` previously could never be satisfied.
+- Text in the generate panel can be selected, and a button copies the status message.
+
 ## 0.4.0
 
 - The generate dialog is now a panel that keeps the outline active: generate repeatedly with

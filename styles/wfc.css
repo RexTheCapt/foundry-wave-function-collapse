@@ -44,6 +44,11 @@
 .wfc-app .wfc-part { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; min-height: 0; }
 .wfc-collection-editor .wfc-part { height: 100%; }
 
-.wfc-generate .wfc-status { min-height: 1.4em; white-space: pre-line; font-size: 0.9em; margin: 0; padding: 0.3rem 0.5rem; border-left: 3px solid #3ddc84; background: rgba(61, 220, 132, 0.08); }
+.wfc-app, .wfc-app * { user-select: text; }
+.wfc-app button, .wfc-app label, .wfc-app .wfc-toolbar { user-select: none; }
+.wfc-generate .wfc-status-row { display: flex; gap: 0.35rem; align-items: flex-start; }
+.wfc-generate .wfc-status-row:has(.wfc-status:empty) { display: none; }
+.wfc-generate .wfc-status-row button { flex: 0 0 auto; width: auto; line-height: 1.6; padding: 0.15rem 0.5rem; }
+.wfc-generate .wfc-status { flex: 1; cursor: text; min-height: 1.4em; white-space: pre-line; font-size: 0.9em; margin: 0; padding: 0.3rem 0.5rem; border-left: 3px solid #3ddc84; background: rgba(61, 220, 132, 0.08); }
 .wfc-generate .wfc-status:empty { display: none; }
 .wfc-generate .wfc-status.wfc-status-error { border-left-color: #e63946; background: rgba(230, 57, 70, 0.08); }

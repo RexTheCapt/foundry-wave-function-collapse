@@ -56,7 +56,10 @@
   <div class="form-fields"><input type="checkbox" name="clearExisting" {{#if clearExisting}}checked{{/if}}></div>
   <p class="hint">{{localize "WFC.Generate.ClearExistingHint"}}</p>
 </div>
-<p class="wfc-status{{#unless statusOk}} wfc-status-error{{/unless}}" data-status>{{status}}</p>
+<div class="wfc-status-row">
+  <p class="wfc-status{{#unless statusOk}} wfc-status-error{{/unless}}" data-status>{{status}}</p>
+  <button type="button" data-action="copyStatus" title="{{localize 'WFC.Generate.Copy'}}"><i class="fa-solid fa-copy"></i></button>
+</div>
 <p class="hint">{{localize "WFC.Generate.PanelHint"}}</p>
 <footer class="form-footer">
   <button type="button" data-action="done"><i class="fa-solid fa-check"></i> {{localize "WFC.Generate.Close"}}</button>

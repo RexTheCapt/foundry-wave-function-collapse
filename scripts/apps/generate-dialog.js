@@ -21,6 +21,7 @@ export class GenerateDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       selectAll: GenerateDialog.#onSelectAll,
       selectNone: GenerateDialog.#onSelectNone,
       randomSeed: GenerateDialog.#onRandomSeed,
+      copyStatus: GenerateDialog.#onCopyStatus,
       done: GenerateDialog.#onDone
     }
   };
@@ -130,6 +131,17 @@ export class GenerateDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static async #onDone() {
     await this.close();
+  }
+
+  static async #onCopyStatus() {
+    if (!this.status) return;
+    try {
+      if (game.clipboard?.copyPlainText) game.clipboard.copyPlainText(this.status);
+      else await navigator.clipboard.writeText(this.status);
+      ui.notifications.info(game.i18n.localize("WFC.Generate.Copied"));
+    } catch (err) {
+      log.warn("copy failed", err);
+    }
   }
 
   static async #onGenerate(event, form) {

@@ -241,3 +241,26 @@ test("compatibleWith constraint and shared tag requirement", () => {
     assert.ok(A.tags.e[0] === "floor" || B.tags.w[0] === "floor");
   }
 });
+
+test("requireAny and shared any accept a tag or a door feature", () => {
+  const variants = expandVariants(sampleTiles);
+  // "wall" is a tag: one of the two tiles must be tagged wall on the shared edge.
+  for (const seed of [1, 2, 3]) {
+    const r = sampleSolve({ cells: [{ i: 0, j: 0 }, { i: 0, j: 1 }], variants, shared: [{ a: 0, sideA: "e", b: 1, sideB: "w", any: "wall" }], seed });
+    assert.ok(r.success, `seed ${seed}`);
+    const [A, B] = r.assignments.map(x => x.variant);
+    assert.ok(A.tags.e[0] === "wall" || B.tags.w[0] === "wall");
+  }
+  // "door" works through the tag or the feature; the sample has both.
+  const d = sampleSolve({ cells: [{ i: 0, j: 0 }], variants, constraints: [{ n: { requireAny: ["door"] } }], seed: 1 });
+  assert.ok(d.success);
+  assert.ok(d.assignments[0].variant.features.n.includes("door"));
+  // A tile tagged wall that draws a door counts for "door" too.
+  const doorWall = normalizeTile({ id: "dw", tags: { n: ["wall"], e: ["x"], s: ["x"], w: ["x"] }, walls: [{ c: [0.3, 0, 0.7, 0], door: 1 }] });
+  const dw = solve({ cells: [{ i: 0, j: 0 }], variants: expandVariants([doorWall]), constraints: [{ n: { requireAny: ["door"] } }], seed: 1 });
+  assert.ok(dw.success);
+  // Something no tile offers fails deterministically with an explanation line.
+  const none = sampleSolve({ cells: [{ i: 0, j: 0 }], variants, constraints: [{ n: { requireAny: ["portcullis"] } }], seed: 1 });
+  assert.equal(none.success, false);
+  assert.ok(describeCellConstraints({ n: { requireAny: ["portcullis"] } }, variants, sampleMapping.compatible)[0].includes("(0 variants)"));
+});

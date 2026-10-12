@@ -256,16 +256,18 @@ const cellKey = (i, j) => `${i},${j}`;
  *   empty the outside is unconstrained.
  * @param {Record<string, string[]>|null} [options.compatible]  Tag compatibility table, see
  *   `buildCompatibility`. Without it, adjacent sides must carry identical tag sets.
- * @param {Array<Record<string, {require?: string[], compatibleWith?: string[], forbid?: string[], requireFeatures?: string[], forbidFeatures?: string[]}>>|null} [options.constraints]
+ * @param {Array<Record<string, {require?: string[], compatibleWith?: string[], forbid?: string[], requireFeatures?: string[], forbidFeatures?: string[], requireAny?: string[]}>>|null} [options.constraints]
  *   Optional per-cell constraints, parallel to `cells`, keyed by side ("n", "e", "s", "w") or "c"
  *   for the tile center. `require` forces the side's tag set to be exactly these tags,
  *   `compatibleWith` forces it to be compatible with these tags (as if a tile with them sat next
  *   to it), `forbid` rejects any variant whose side contains one of the listed tags,
- *   `requireFeatures` demands door features on that side or in the center, and `forbidFeatures`
- *   rejects variants offering them there.
- * @param {Array<{a: number, sideA: string, b: number, sideB: string, feature?: string, tags?: string[]}>} [options.shared]
+ *   `requireFeatures` demands door features on that side or in the center, `forbidFeatures`
+ *   rejects variants offering them there, and `requireAny` lists entries that must each be
+ *   present either as the side's exact tag or as a door feature on that side.
+ * @param {Array<{a: number, sideA: string, b: number, sideB: string, feature?: string, tags?: string[], any?: string}>} [options.shared]
  *   Binary requirements across an edge: at least one of cell a (on sideA) or cell b (on sideB)
- *   must offer the feature, or carry exactly the tags.
+ *   must offer the feature, carry exactly the tags, or (for `any`) have that entry as its exact
+ *   tag or as a door feature.
  * @param {string} [options.seed]
  * @param {number} [options.maxAttempts]  Restarts allowed on contradiction.
  * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null, failure: {stage: string, cell: object, from?: object}|null}}
@@ -313,11 +315,13 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
     const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
     const requireFeatures = c?.requireFeatures?.length ? normalizeTags(c.requireFeatures) : null;
     const forbidFeatures = c?.forbidFeatures?.length ? normalizeTags(c.forbidFeatures) : null;
-    if (!require && !compatibleWith && !forbid && !requireFeatures && !forbidFeatures) return null;
+    const requireAny = c?.requireAny?.length ? normalizeTags(c.requireAny) : null;
+    if (!require && !compatibleWith && !forbid && !requireFeatures && !forbidFeatures && !requireAny) return null;
     return Uint8Array.from(variants, v => {
       const features = v.features?.[place] ?? [];
       if (requireFeatures && !requireFeatures.every(f => features.includes(f))) return 0;
       if (forbidFeatures && features.some(f => forbidFeatures.includes(f))) return 0;
+      if (requireAny && !requireAny.every(e => features.includes(e) || (place !== CENTER && tagsMatch(v.tags[place], [e])))) return 0;
       if (place === CENTER) return 1;
       const tags = v.tags[place];
       if (require && !tagsMatch(tags, require)) return 0;
@@ -332,6 +336,7 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
     const test = (v, side) => {
       if (r.feature) return (v.features?.[side] ?? []).includes(r.feature);
       if (r.tags) return tagsMatch(v.tags[side], normalizeTags(r.tags));
+      if (r.any) return (v.features?.[side] ?? []).includes(r.any) || tagsMatch(v.tags[side], [r.any]);
       return false;
     };
     return {
@@ -385,6 +390,10 @@ export function describeCellConstraints(cellConstraints, variants, compatible = 
       lines.push(`${name} must offer [${rf}] (${count(v => rf.every(f => (v.features?.[place] ?? []).includes(f)))} variants)`);
     }
     if (c.forbidFeatures?.length) lines.push(`${name} must not offer [${normalizeTags(c.forbidFeatures)}]`);
+    if (c.requireAny?.length) {
+      const ra = normalizeTags(c.requireAny);
+      lines.push(`${name} must have [${ra}] as its tag or draw it as a door (${count(v => ra.every(e => (v.features?.[place] ?? []).includes(e) || (place !== CENTER && tagsMatch(v.tags[place], [e]))))} variants)`);
+    }
   }
   return lines;
 }

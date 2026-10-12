@@ -93,9 +93,9 @@ Select **Door and edge markers (WFC)** in the Tiles controls.
 - Shift-click repeats the last marker, right-click removes one. Markers are saved with the scene and
   drawn in green while the Tiles controls are open.
 
-To make doors appear *only* at markers, put `door` in **Only where marked** in the generate dialog.
+To make doors appear *only* at markers, put `door` in **Only where marked** in the generate panel.
 Tiles with a door on an unmarked edge or inside an unmarked cell are then never placed there. The
-`secret` feature works the same way for secret doors.
+same works for `secret` doors or for any tag, such as `wall`.
 
 ### 3. Manage tile collections
 
