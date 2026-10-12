@@ -1,18 +1,11 @@
 {
   "version": 1,
   "name": "Sample dungeon",
-  "description": "Simple generated stone tiles with one-sided walls. Side tags: floor, wall, door. A wall or door side may only face a floor side, so walls are drawn once and doors open onto floor. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
+  "description": "Simple generated stone tiles. Walls are centered on the grid line and drawn half by each tile, so side tags match like for like: floor, wall, door. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
   "boundary": [
     "wall"
   ],
-  "compatible": {
-    "wall": [
-      "floor"
-    ],
-    "door": [
-      "floor"
-    ]
-  },
+  "compatible": {},
   "tiles": {
     "floor.png": {
       "tags": {

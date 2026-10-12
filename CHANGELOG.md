@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+- Fixed a contradiction when regenerating next to existing tiles: the boundary tag was also applied
+  to sides that face an existing tile, which with one-sided walls could never be satisfied.
+- Sample collection uses thin walls centered on the grid line again, drawn half by each tile, so
+  straight walls stay straight instead of switching sides from cell to cell. Doors are drawn half
+  by each tile as well. The compatibility table feature stays available for one-sided art.
+
 ## 0.4.2
 
 - Edge markers have separate side tags and door features again. The features field only accepts

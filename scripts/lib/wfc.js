@@ -309,7 +309,9 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
   const PLACES = [...SIDES, CENTER];
   const allowedMasks = cells.map((cell, k) => PLACES.map((place, s) => {
     const c = constraints?.[k]?.[place];
-    const outside = place !== CENTER && neighbors[k][s] === -1;
+    // Boundary tags apply to sides facing the open outside: not to sides that face an existing
+    // tile (compatibleWith) and not when a marker already dictates the side (require).
+    const outside = place !== CENTER && neighbors[k][s] === -1 && !c?.compatibleWith && !c?.require;
     const require = c?.require ? normalizeTags(c.require) : (outside && boundary.length ? boundary : null);
     const compatibleWith = c?.compatibleWith ? normalizeTags(c.compatibleWith) : null;
     const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
@@ -378,7 +380,8 @@ export function describeCellConstraints(cellConstraints, variants, compatible = 
   for (const place of [...SIDES, CENTER]) {
     const c = cellConstraints?.[place] ?? {};
     const name = { n: "north", e: "east", s: "south", w: "west", c: "center" }[place];
-    const require = c.require ? normalizeTags(c.require) : (outside.includes(place) && boundary.length ? boundary : null);
+    const open = outside.includes(place) && !c.compatibleWith && !c.require;
+    const require = c.require ? normalizeTags(c.require) : (open && boundary.length ? boundary : null);
     if (require) lines.push(`${name} must be exactly [${require}] (${count(v => tagsMatch(v.tags[place], require))} variants)`);
     if (c.compatibleWith) {
       const cw = normalizeTags(c.compatibleWith);

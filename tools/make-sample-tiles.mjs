@@ -10,7 +10,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const SIZE = 128;
-const BAND = 10; // wall thickness in pixels, drawn by one tile only
+const BAND = 6; // half wall thickness in pixels: each tile draws its half, centered on the grid line
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../collections/sample-dungeon");
 
 // ---------- tiny PNG encoder ----------
@@ -149,10 +149,10 @@ function sideWalls(side, door = false) {
 /**
  * Tile definitions: which sides are walls ("w"), doors ("d") or open floor ("f").
  *
- * Walls are one-sided: the tile with a "w" or "d" side draws the whole wall band or door, and the
- * tile on the other side of that edge must show plain floor up to the edge. That is expressed by
- * the collection's compatibility table (wall and door sides may only face floor sides), so walls
- * are never doubled and a door always opens onto floor. `midDoor` adds a door across the tile.
+ * Walls sit on the grid line between two tiles and each tile draws its half of the band, so a
+ * straight wall is always straight and never doubled. A wall side therefore always faces another
+ * wall side, and a door side faces a door side (both halves of the door are drawn). `midDoor`
+ * adds a door across the middle of the tile.
  */
 const TILES = [
   { file: "floor.png", sides: "ffff", weight: 4, rotate: false, base: "floor" },
@@ -172,9 +172,9 @@ fs.mkdirSync(OUT, { recursive: true });
 const mapping = {
   version: 1,
   name: "Sample dungeon",
-  description: "Simple generated stone tiles with one-sided walls. Side tags: floor, wall, door. A wall or door side may only face a floor side, so walls are drawn once and doors open onto floor. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
+  description: "Simple generated stone tiles. Walls are centered on the grid line and drawn half by each tile, so side tags match like for like: floor, wall, door. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
   boundary: ["wall"],
-  compatible: { wall: ["floor"], door: ["floor"] },
+  compatible: {},
   tiles: {}
 };
 TILES.forEach((def, index) => {

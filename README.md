@@ -116,9 +116,9 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 - Tags are compared as sets, so order does not matter: `floor,wall` equals `wall,floor`.
 - By default the sets on the shared side must be **identical**. A side tagged `floor` does not
   match a side tagged `floor,rubble`.
-- A collection can declare **compatible tags** so that differing tags may face each other. The
-  sample uses `wall: floor` and `door: floor`: a wall or door side may only face a floor side. A
-  tag listed on the left stops matching itself unless it lists itself, so two wall sides never meet.
+- A collection can declare **compatible tags** so that differing tags may face each other, for
+  example `wall: floor` for art where only one tile draws the wall. A tag listed on the left stops
+  matching itself unless it lists itself.
 - An empty tag set only matches another empty tag set.
 - The wildcard `*` matches anything.
 - When a tile allows rotation, its tags and walls rotate with it (clockwise: north becomes east).
@@ -127,14 +127,15 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 
 Two conventions work:
 
-1. **One-sided** (the sample): the tile whose side is tagged `wall` draws the whole wall band and
-   places the wall segment on its edge. The neighbour shows plain floor up to the edge and is
-   tagged `floor` there. The compatibility table `wall: floor` enforces that. Walls are never
-   doubled and a door tagged `door` (compatible with `floor`) always opens onto floor.
-2. **Two-sided**: both tiles draw half a wall on the shared edge and both sides are tagged `wall`
-   with no compatibility table. Identical wall segments are deduplicated before placing, so the
-   Foundry wall is still single, but the artwork is twice as thick and a door must be paired with
-   a matching door tile on the other side.
+1. **Centered walls** (the sample): the wall sits on the grid line and both tiles draw their half of
+   the band, so both sides are tagged `wall` and need no compatibility table. A straight wall is
+   always straight because every half is in the same place relative to the line. Keep the halves
+   thin. Doors work the same way: both tiles draw half of the door and both sides are tagged `door`.
+   Identical wall segments are deduplicated, so the Foundry wall is still single.
+2. **One-sided walls**: the tile tagged `wall` draws the whole band inside its own area and the
+   neighbour shows floor up to the edge, enforced with the compatibility table `wall: floor`. This
+   suits art with thick walls, but along a straight line the band may switch sides from cell to
+   cell unless your side tags also encode where the band is.
 
 ### Doors
 
@@ -144,11 +145,10 @@ A door is any wall segment of type *Door* or *Secret door* in the tile editor. T
 - A door segment lying on a tile edge is a door feature of that side.
 - Any other door segment is a door feature of the tile center.
 
-With one-sided walls a door tile draws the complete door on its edge, tags that side `door`, and
-the compatibility table (`door: floor`) makes it face plain floor, so a door never leads into a
-wall. If you prefer two-sided art, tag both halves `door` without a compatibility entry so door
-tiles pair up. Should a plain wall segment ever share a line with a door, the wall is cut away
-around the door span so it stays passable.
+With centered walls both tiles draw half of the door and tag that side `door`, so door tiles pair
+up and a door never leads into a wall. With one-sided walls a door tile draws the complete door and
+the compatibility table (`door: floor`) makes it face plain floor. Should a plain wall segment ever
+share a line with a door, the wall is cut away around the door span so it stays passable.
 
 A door in the middle of a tile (`door-mid.png`) is a center feature and can be demanded with a cell
 marker.
@@ -188,7 +188,7 @@ You can edit the file by hand; the collection editor reloads it from disk.
 ## Sample collection
 
 `collections/sample-dungeon` ships with ten generated stone tiles using the tags `floor`, `wall`
-and `door` with one-sided walls, including a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
+and `door` with thin centered walls, including a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
 `npm run sample-tiles`.
 
 ## API
