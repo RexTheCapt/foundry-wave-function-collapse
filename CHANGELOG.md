@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Collections can declare compatible tags (`"compatible": { "wall": ["floor"] }`), so differing
+  tags may face each other and a listed tag stops matching itself. Editable in the collection
+  editor.
+- Sample collection rebuilt with one-sided walls: only one tile draws the wall on an edge and doors
+  always open onto floor. Fixes doubled wall art and doors leading into walls. `door-wall.png` is
+  gone; `door-1.png` now serves that purpose.
+- Surrounding tiles constrain regeneration through compatibility instead of exact equality, and
+  edge markers with tags require the tags on one side of the edge with a compatible other side.
+
 ## 0.2.1
 
 - Fixed tiles being placed half a cell off on Foundry v14, where a tile's x and y are the position

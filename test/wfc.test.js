@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
+import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
 import { normalizeMapping } from "../scripts/lib/mapping.js";
 import { cellsInPolygon } from "../scripts/lib/geometry.js";
 
@@ -39,38 +39,49 @@ test("expandVariants dedupes symmetric rotations", () => {
   assert.equal(expandVariants([asymmetric]).length, 2);
 });
 
-function assertConsistent(result, cells) {
+const sampleCompat = buildCompatibility(sampleMapping.compatible);
+
+function assertConsistent(result, cells, compat = sampleCompat) {
   const byKey = new Map(result.assignments.map(a => [`${a.cell.i},${a.cell.j}`, a.variant]));
   for (const a of result.assignments) {
     for (const side of SIDES) {
       const [di, dj] = DELTAS[side];
       const other = byKey.get(`${a.cell.i + di},${a.cell.j + dj}`);
       if (!other) continue;
-      assert.ok(tagsMatch(a.variant.tags[side], other.tags[OPPOSITE[side]]), `mismatch at ${a.cell.i},${a.cell.j} side ${side}`);
+      assert.ok(tagsMatch(a.variant.tags[side], other.tags[OPPOSITE[side]], compat), `mismatch at ${a.cell.i},${a.cell.j} side ${side}`);
     }
   }
   assert.equal(result.assignments.length, cells.length);
 }
+const sampleSolve = opts => solve({ compatible: sampleMapping.compatible, ...opts });
 
 test("solve fills a rectangle with the sample collection and respects the boundary", () => {
   const polygon = [[0, 0], [1200, 0], [1200, 800], [0, 800]];
   const cells = cellsInPolygon(polygon, 100);
   assert.equal(cells.length, 96);
   const variants = expandVariants(sampleTiles);
-  const result = solve({ cells, variants, boundaryTags: ["wall"], seed: "test" });
+  const result = sampleSolve({ cells, variants, boundaryTags: ["wall"], seed: "test" });
   assert.ok(result.success, "expected a solution");
   assertConsistent(result, cells);
+  const byKey = new Map(result.assignments.map(a => [`${a.cell.i},${a.cell.j}`, a.variant]));
   for (const a of result.assignments) {
     if (a.cell.i === 0) assert.deepEqual(a.variant.tags.n, ["wall"]);
     if (a.cell.j === 11) assert.deepEqual(a.variant.tags.e, ["wall"]);
+    // One-sided walls: a wall or door side always faces a floor side, never another wall.
+    for (const side of SIDES) {
+      const [di, dj] = DELTAS[side];
+      const other = byKey.get(`${a.cell.i + di},${a.cell.j + dj}`);
+      if (!other) continue;
+      if (a.variant.tags[side][0] !== "floor") assert.deepEqual(other.tags[OPPOSITE[side]], ["floor"]);
+    }
   }
 });
 
 test("solve is deterministic for a seed", () => {
   const cells = cellsInPolygon([[0, 0], [600, 0], [600, 600], [0, 600]], 100);
   const variants = expandVariants(sampleTiles);
-  const a = solve({ cells, variants, seed: "abc" });
-  const b = solve({ cells, variants, seed: "abc" });
+  const a = sampleSolve({ cells, variants, seed: "abc" });
+  const b = sampleSolve({ cells, variants, seed: "abc" });
   assert.deepEqual(a.assignments.map(x => x.variantIndex), b.assignments.map(x => x.variantIndex));
 });
 
@@ -78,7 +89,7 @@ test("solve handles an irregular polygon", () => {
   const polygon = [[0, 0], [700, 0], [700, 300], [400, 300], [400, 600], [0, 600]];
   const cells = cellsInPolygon(polygon, 100);
   assert.equal(cells.length, 7 * 3 + 4 * 3);
-  const result = solve({ cells, variants: expandVariants(sampleTiles), boundaryTags: "wall", seed: 7 });
+  const result = sampleSolve({ cells, variants: expandVariants(sampleTiles), boundaryTags: "wall", seed: 7 });
   assert.ok(result.success);
   assertConsistent(result, cells);
 });
@@ -93,28 +104,29 @@ test("solve reports failure when no tile fits", () => {
 });
 
 test("solve with no cells succeeds trivially", () => {
-  const result = solve({ cells: [], variants: expandVariants(sampleTiles) });
+  const result = sampleSolve({ cells: [], variants: expandVariants(sampleTiles) });
   assert.ok(result.success);
   assert.equal(result.assignments.length, 0);
 });
 
-test("solve honours per-side require and forbid constraints", () => {
+test("solve honours per-side require, compatibleWith and forbid constraints", () => {
   const cells = cellsInPolygon([[0, 0], [400, 0], [400, 100], [0, 100]], 100);
   const variants = expandVariants(sampleTiles);
-  // Forbid doors everywhere except the edge between cell 1 and cell 2, where a door is required.
+  // Forbid doors everywhere except the edge between cell 1 and cell 2, where cell 1 draws a door
+  // and cell 2 must show floor (the sample's doors are one-sided).
   const constraints = cells.map(() => ({
     n: { forbid: ["door"] }, e: { forbid: ["door"] }, s: { forbid: ["door"] }, w: { forbid: ["door"] }
   }));
   constraints[1].e = { require: ["door"] };
-  constraints[2].w = { require: ["door"] };
-  const result = solve({ cells, variants, constraints, boundaryTags: ["wall"], seed: "doors" });
+  constraints[2].w = { compatibleWith: ["door"] };
+  const result = sampleSolve({ cells, variants, constraints, boundaryTags: ["wall"], seed: "doors" });
   assert.ok(result.success);
   assertConsistent(result, cells);
   assert.deepEqual(result.assignments[1].variant.tags.e, ["door"]);
-  assert.deepEqual(result.assignments[2].variant.tags.w, ["door"]);
+  assert.deepEqual(result.assignments[2].variant.tags.w, ["floor"]);
   for (const a of result.assignments) {
     for (const side of SIDES) {
-      const isTheDoor = (a.cell.j === 1 && side === "e") || (a.cell.j === 2 && side === "w");
+      const isTheDoor = a.cell.j === 1 && side === "e";
       if (!isTheDoor) assert.ok(!a.variant.tags[side].includes("door"), `unexpected door at ${a.cell.j} ${side}`);
     }
   }
@@ -124,7 +136,7 @@ test("solve: a require on an outside edge overrides boundary tags", () => {
   const cells = [{ i: 0, j: 0 }];
   const variants = expandVariants(sampleTiles);
   const constraints = [{ n: { require: ["floor"] } }];
-  const result = solve({ cells, variants, constraints, boundaryTags: ["wall"], seed: 1 });
+  const result = sampleSolve({ cells, variants, constraints, boundaryTags: ["wall"], seed: 1 });
   assert.ok(result.success);
   const tags = result.assignments[0].variant.tags;
   assert.deepEqual(tags.n, ["floor"]);
@@ -170,11 +182,41 @@ test("features: shared requirement is satisfied by either neighbour", () => {
   const variants = expandVariants([southDoor, plain]);
   const shared = [{ a: 0, sideA: "s", b: 1, sideB: "n", feature: "door" }];
   for (const seed of [1, 2, 3, 4, 5]) {
-    const r = solve({ cells, variants, sharedFeatures: shared, seed });
+    const r = solve({ cells, variants, shared, seed });
     assert.ok(r.success);
     const [top, bottom] = r.assignments.map(x => x.variant);
     assert.ok(top.features.s.includes("door") || bottom.features.n.includes("door"), `seed ${seed}`);
   }
-  const impossible = solve({ cells, variants: expandVariants([plain]), sharedFeatures: shared, seed: 1, maxAttempts: 2 });
+  const impossible = solve({ cells, variants: expandVariants([plain]), shared, seed: 1, maxAttempts: 2 });
   assert.equal(impossible.success, false);
+});
+
+test("compatibility tables allow asymmetric pairs and drop self-matching for listed tags", () => {
+  const compat = buildCompatibility({ wall: ["floor"] });
+  assert.ok(tagsMatch(["wall"], ["floor"], compat));
+  assert.ok(tagsMatch(["floor"], ["wall"], compat));
+  assert.ok(tagsMatch(["floor"], ["floor"], compat));
+  assert.ok(!tagsMatch(["wall"], ["wall"], compat));
+  assert.ok(tagsMatch(["wall"], ["wall"], buildCompatibility({ wall: ["floor", "wall"] })));
+  assert.ok(tagsMatch(["x"], ["x"], compat));
+  assert.ok(!tagsMatch(["x"], ["y"], compat));
+  assert.ok(tagsMatch(["*"], ["wall"], compat));
+  assert.deepEqual(mergeCompatibility([{ wall: ["floor"] }, { wall: ["rubble"], door: "floor" }]), { wall: ["floor", "rubble"], door: ["floor"] });
+});
+
+test("compatibleWith constraint and shared tag requirement", () => {
+  const cells = [{ i: 0, j: 0 }, { i: 0, j: 1 }];
+  const variants = expandVariants(sampleTiles);
+  // A wall tile sits north of cell 0: the new tile's north side must be compatible with "wall", i.e. floor.
+  const r = sampleSolve({ cells, variants, constraints: [{ n: { compatibleWith: ["wall"] } }, {}], seed: 2 });
+  assert.ok(r.success);
+  assert.deepEqual(r.assignments[0].variant.tags.n, ["floor"]);
+  // Shared tags: one of the two sides of the shared edge must be exactly "door".
+  for (const seed of [1, 2, 3]) {
+    const d = sampleSolve({ cells, variants, shared: [{ a: 0, sideA: "e", b: 1, sideB: "w", tags: ["door"] }], seed });
+    assert.ok(d.success);
+    const [A, B] = d.assignments.map(x => x.variant);
+    assert.ok(A.tags.e[0] === "door" || B.tags.w[0] === "door");
+    assert.ok(A.tags.e[0] === "floor" || B.tags.w[0] === "floor");
+  }
 });

@@ -80,8 +80,8 @@ outside, and walls on the shared border are kept in the pool so doors in neighbo
 
 Select **Door and edge markers (WFC)** in the Tiles controls.
 
-- Click near a cell edge to place an **edge marker**. It can require side tags on that edge (both
-  tiles must have exactly those tags there) and door features (`door` or `secret`): at least one of
+- Click near a cell edge to place an **edge marker**. It can require side tags on that edge (one of
+  the two tiles must have exactly those tags there, the other must be compatible) and door features (`door` or `secret`): at least one of
   the two tiles must draw that kind of door on the edge.
 - Click the center of a cell to place a **cell marker** that requires a door drawn inside the tile,
   for example a door across a corridor.
@@ -109,14 +109,27 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 ## Tag matching rules
 
 - Tags are compared as sets, so order does not matter: `floor,wall` equals `wall,floor`.
-- The sets on the shared side must be **identical**. A side tagged `floor` does not match a side
-  tagged `floor,rubble`.
+- By default the sets on the shared side must be **identical**. A side tagged `floor` does not
+  match a side tagged `floor,rubble`.
+- A collection can declare **compatible tags** so that differing tags may face each other. The
+  sample uses `wall: floor` and `door: floor`: a wall or door side may only face a floor side. A
+  tag listed on the left stops matching itself unless it lists itself, so two wall sides never meet.
 - An empty tag set only matches another empty tag set.
 - The wildcard `*` matches anything.
 - When a tile allows rotation, its tags and walls rotate with it (clockwise: north becomes east).
 
-Because adjacent tiles both draw their own walls on the shared edge, identical wall segments are
-removed before placing, so a wall tagged side on both tiles results in a single wall.
+### One-sided or two-sided walls
+
+Two conventions work:
+
+1. **One-sided** (the sample): the tile whose side is tagged `wall` draws the whole wall band and
+   places the wall segment on its edge. The neighbour shows plain floor up to the edge and is
+   tagged `floor` there. The compatibility table `wall: floor` enforces that. Walls are never
+   doubled and a door tagged `door` (compatible with `floor`) always opens onto floor.
+2. **Two-sided**: both tiles draw half a wall on the shared edge and both sides are tagged `wall`
+   with no compatibility table. Identical wall segments are deduplicated before placing, so the
+   Foundry wall is still single, but the artwork is twice as thick and a door must be paired with
+   a matching door tile on the other side.
 
 ### Doors
 
@@ -126,13 +139,11 @@ A door is any wall segment of type *Door* or *Secret door* in the tile editor. T
 - A door segment lying on a tile edge is a door feature of that side.
 - Any other door segment is a door feature of the tile center.
 
-Two ways to build door tiles:
-
-1. **Half doors**: both tiles draw their half of the door and the shared side is tagged `door`, so a
-   door tile is always paired with another door tile (`door-1.png` in the sample).
-2. **Door as a wall**: one tile draws the complete door on its edge and tags that side `wall`, so it
-   can sit next to any wall tile (`door-wall.png` in the sample). The neighbour's plain wall on that
-   line is cut away around the door so it stays passable.
+With one-sided walls a door tile draws the complete door on its edge, tags that side `door`, and
+the compatibility table (`door: floor`) makes it face plain floor, so a door never leads into a
+wall. If you prefer two-sided art, tag both halves `door` without a compatibility entry so door
+tiles pair up. Should a plain wall segment ever share a line with a door, the wall is cut away
+around the door span so it stays passable.
 
 A door in the middle of a tile (`door-mid.png`) is a center feature and can be demanded with a cell
 marker.
@@ -164,13 +175,15 @@ Each collection directory contains a `mapping.json` that maps every tile image i
 - `weight` is the relative probability of the tile. `rotate` enables the three rotated variants.
 - `boundary` pre-fills the boundary tags in the generate dialog.
 - `restricted` pre-fills "Only where marked" in the generate dialog.
+- `compatible` maps a tag to the tags it may face, e.g. `{ "wall": ["floor"] }`. The relation is
+  symmetric; tables of all selected collections are merged.
 
 You can edit the file by hand; the collection editor reloads it from disk.
 
 ## Sample collection
 
-`collections/sample-dungeon` ships with eleven generated stone tiles using the tags `floor`, `wall`
-and `door`, including a door drawn as a wall and a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
+`collections/sample-dungeon` ships with ten generated stone tiles using the tags `floor`, `wall`
+and `door` with one-sided walls, including a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
 `npm run sample-tiles`.
 
 ## API

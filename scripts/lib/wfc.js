@@ -62,16 +62,69 @@ export function normalizeTags(tags) {
 }
 
 /**
- * Two normalized tag lists match when they are identical, or when either contains the wildcard.
+ * Build a tag compatibility table from a mapping's "compatible" object, e.g.
+ * `{ "wall": ["floor"] }` meaning a wall side may face a floor side.
+ *
+ * The relation is symmetric. A tag that appears as a key no longer matches itself unless it lists
+ * itself; tags that never appear as a key keep matching themselves.
+ * @param {Record<string, string[]|string>|null|undefined} spec
+ * @returns {{pairs: Map<string, Set<string>>, explicit: Set<string>}}
+ */
+export function buildCompatibility(spec) {
+  const pairs = new Map();
+  const explicit = new Set();
+  const add = (x, y) => {
+    if (!pairs.has(x)) pairs.set(x, new Set());
+    pairs.get(x).add(y);
+  };
+  for (const [rawTag, list] of Object.entries(spec ?? {})) {
+    const tag = String(rawTag).trim();
+    if (!tag) continue;
+    explicit.add(tag);
+    for (const other of normalizeTags(list)) {
+      add(tag, other);
+      add(other, tag);
+    }
+  }
+  return { pairs, explicit };
+}
+
+/** Merge several compatibility specs (objects) into one. */
+export function mergeCompatibility(specs) {
+  const merged = {};
+  for (const spec of specs) {
+    for (const [tag, list] of Object.entries(spec ?? {})) {
+      merged[tag] = normalizeTags([...(merged[tag] ?? []), ...normalizeTags(list)]);
+    }
+  }
+  return merged;
+}
+
+/** Whether two single tags may face each other. */
+export function tagCompatible(x, y, compat = null) {
+  if (x === y) return !compat?.explicit.has(x) || compat.pairs.get(x)?.has(x) === true;
+  return compat?.pairs.get(x)?.has(y) === true;
+}
+
+/**
+ * Two normalized tag lists match when every tag on each side is compatible with a tag on the
+ * other side, or when either contains the wildcard. Without a compatibility table this is set
+ * equality.
  * @param {string[]} a
  * @param {string[]} b
+ * @param {{pairs: Map<string, Set<string>>, explicit: Set<string>}|null} [compat]
  * @returns {boolean}
  */
-export function tagsMatch(a, b) {
+export function tagsMatch(a, b, compat = null) {
   if (a.includes(WILDCARD) || b.includes(WILDCARD)) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
+  if (!compat || !compat.pairs.size) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  if (!a.length || !b.length) return a.length === b.length;
+  return a.every(x => b.some(y => tagCompatible(x, y, compat)))
+    && b.every(y => a.some(x => tagCompatible(x, y, compat)));
 }
 
 /**
@@ -201,18 +254,23 @@ const cellKey = (i, j) => `${i},${j}`;
  * @param {string[]|string|null} [options.boundaryTags]  When set, every side that faces outside
  *   the cell set must match these tags unless a per-side constraint says otherwise. When null or
  *   empty the outside is unconstrained.
- * @param {Array<Record<string, {require?: string[], forbid?: string[], requireFeatures?: string[], forbidFeatures?: string[]}>>|null} [options.constraints]
+ * @param {Record<string, string[]>|null} [options.compatible]  Tag compatibility table, see
+ *   `buildCompatibility`. Without it, adjacent sides must carry identical tag sets.
+ * @param {Array<Record<string, {require?: string[], compatibleWith?: string[], forbid?: string[], requireFeatures?: string[], forbidFeatures?: string[]}>>|null} [options.constraints]
  *   Optional per-cell constraints, parallel to `cells`, keyed by side ("n", "e", "s", "w") or "c"
- *   for the tile center. `require` forces the side's tag set to match exactly, `forbid` rejects any
- *   variant whose side contains one of the listed tags, `requireFeatures` demands door features
- *   on that side or in the center, and `forbidFeatures` rejects variants offering them there.
- * @param {Array<{a: number, sideA: string, b: number, sideB: string, feature: string}>} [options.sharedFeatures]
- *   Binary requirements: at least one of cell a (on sideA) or cell b (on sideB) must offer the feature.
+ *   for the tile center. `require` forces the side's tag set to be exactly these tags,
+ *   `compatibleWith` forces it to be compatible with these tags (as if a tile with them sat next
+ *   to it), `forbid` rejects any variant whose side contains one of the listed tags,
+ *   `requireFeatures` demands door features on that side or in the center, and `forbidFeatures`
+ *   rejects variants offering them there.
+ * @param {Array<{a: number, sideA: string, b: number, sideB: string, feature?: string, tags?: string[]}>} [options.shared]
+ *   Binary requirements across an edge: at least one of cell a (on sideA) or cell b (on sideB)
+ *   must offer the feature, or carry exactly the tags.
  * @param {string} [options.seed]
  * @param {number} [options.maxAttempts]  Restarts allowed on contradiction.
  * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null}}
  */
-export function solve({ cells, variants, boundaryTags = null, constraints = null, sharedFeatures = [], seed = "", maxAttempts = 20 }) {
+export function solve({ cells, variants, boundaryTags = null, compatible = null, constraints = null, shared = [], seed = "", maxAttempts = 20 }) {
   const V = variants.length;
   const N = cells.length;
   if (!V) throw new Error("No tile variants to solve with");
@@ -224,13 +282,15 @@ export function solve({ cells, variants, boundaryTags = null, constraints = null
     return index.get(cellKey(c.i + di, c.j + dj)) ?? -1;
   }));
 
+  const compatTable = buildCompatibility(compatible);
+
   // compat[s][a * V + b] === 1 when variant a may have variant b on its side SIDES[s]
   const compat = SIDES.map(side => {
     const m = new Uint8Array(V * V);
     for (let a = 0; a < V; a++) {
       const ta = variants[a].tags[side];
       for (let b = 0; b < V; b++) {
-        if (tagsMatch(ta, variants[b].tags[OPPOSITE[side]])) m[a * V + b] = 1;
+        if (tagsMatch(ta, variants[b].tags[OPPOSITE[side]], compatTable)) m[a * V + b] = 1;
       }
     }
     return m;
@@ -245,10 +305,11 @@ export function solve({ cells, variants, boundaryTags = null, constraints = null
     const c = constraints?.[k]?.[place];
     const outside = place !== CENTER && neighbors[k][s] === -1;
     const require = c?.require ? normalizeTags(c.require) : (outside && boundary.length ? boundary : null);
+    const compatibleWith = c?.compatibleWith ? normalizeTags(c.compatibleWith) : null;
     const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
     const requireFeatures = c?.requireFeatures?.length ? normalizeTags(c.requireFeatures) : null;
     const forbidFeatures = c?.forbidFeatures?.length ? normalizeTags(c.forbidFeatures) : null;
-    if (!require && !forbid && !requireFeatures && !forbidFeatures) return null;
+    if (!require && !compatibleWith && !forbid && !requireFeatures && !forbidFeatures) return null;
     return Uint8Array.from(variants, v => {
       const features = v.features?.[place] ?? [];
       if (requireFeatures && !requireFeatures.every(f => features.includes(f))) return 0;
@@ -256,18 +317,26 @@ export function solve({ cells, variants, boundaryTags = null, constraints = null
       if (place === CENTER) return 1;
       const tags = v.tags[place];
       if (require && !tagsMatch(tags, require)) return 0;
+      if (compatibleWith && !tagsMatch(tags, compatibleWith, compatTable)) return 0;
       if (forbid && tags.some(t => forbid.includes(t))) return 0;
       return 1;
     });
   }));
 
-  // Binary "at least one side offers the feature" requirements, as masks over variants.
-  const shared = (sharedFeatures ?? []).map(r => ({
-    a: r.a,
-    b: r.b,
-    maskA: Uint8Array.from(variants, v => (v.features?.[r.sideA] ?? []).includes(r.feature) ? 1 : 0),
-    maskB: Uint8Array.from(variants, v => (v.features?.[r.sideB] ?? []).includes(r.feature) ? 1 : 0)
-  }));
+  // Binary "at least one side offers the feature / carries the tags" requirements, as masks.
+  const sharedMasks = (shared ?? []).map(r => {
+    const test = (v, side) => {
+      if (r.feature) return (v.features?.[side] ?? []).includes(r.feature);
+      if (r.tags) return tagsMatch(v.tags[side], normalizeTags(r.tags));
+      return false;
+    };
+    return {
+      a: r.a,
+      b: r.b,
+      maskA: Uint8Array.from(variants, v => (test(v, r.sideA) ? 1 : 0)),
+      maskB: Uint8Array.from(variants, v => (test(v, r.sideB) ? 1 : 0))
+    };
+  });
 
   const weights = Float64Array.from(variants, v => v.weight);
   const weightLog = Float64Array.from(weights, w => w * Math.log(w));
@@ -275,7 +344,7 @@ export function solve({ cells, variants, boundaryTags = null, constraints = null
   let last = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const rng = mulberry32(hashSeed(`${seed}#${attempt}`));
-    last = attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared, weights, weightLog, rng });
+    last = attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared: sharedMasks, weights, weightLog, rng });
     if (last.success) return { ...last, attempts: attempt + 1 };
   }
   return { success: false, attempts: maxAttempts, assignments: [], failedCell: last?.failedCell ?? null };

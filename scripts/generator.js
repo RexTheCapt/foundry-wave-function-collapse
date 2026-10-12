@@ -4,7 +4,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { cellsInPolygon, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
-import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
+import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
 import { edgeCellSides } from "./lib/edges.js";
 import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
 import { getMarkers } from "./markers.js";
@@ -134,7 +134,8 @@ export async function generateDungeon({
     return null;
   }
   const variants = expandVariants(tiles);
-  log.debug(`${tiles.length} tiles expanded to ${variants.length} variants`);
+  const compatible = mergeCompatibility(collections.map(c => c.mapping.compatible));
+  log.debug(`${tiles.length} tiles expanded to ${variants.length} variants; compatibility`, compatible);
 
   // Per-cell constraints: restricted tags and features first, then surrounding tiles, then markers.
   const constraints = cells.map(() => ({}));
@@ -157,13 +158,13 @@ export async function generateDungeon({
         if (cellSet.has(neighborKey)) continue;
         const neighbor = existing.get(neighborKey);
         if (!neighbor) continue;
-        ensure(k, side).require = neighbor.tags[OPPOSITE[side]];
+        ensure(k, side).compatibleWith = neighbor.tags[OPPOSITE[side]];
         surroundingSides++;
       }
     });
   }
   const markers = getMarkers(scene);
-  const sharedFeatures = [];
+  const shared = [];
   let appliedMarkers = 0;
   for (const m of markers) {
     if (m.kind === "cell") {
@@ -181,28 +182,40 @@ export async function generateDungeon({
     appliedMarkers++;
     for (const x of inside) {
       const c = ensure(x.k, x.side);
-      if (m.tags.length) c.require = m.tags;
+      c.forbid = without(c.forbid, m.tags);
       c.forbidFeatures = without(c.forbidFeatures, m.features);
     }
-    if (!m.features.length) continue;
-    if (inside.length === 2) {
-      const [A, B] = inside;
-      for (const feature of m.features) sharedFeatures.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, feature });
-    } else {
-      const inner = inside[0];
-      const outer = ends.find(x => x.k === undefined);
-      const outerFeatures = existing.get(cellKey(outer.cell.i, outer.cell.j))?.features?.[outer.side] ?? [];
-      const missing = m.features.filter(f => !outerFeatures.includes(f));
-      if (missing.length) {
-        const c = ensure(inner.k, inner.side);
-        c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), ...missing]);
+    const outer = ends.find(x => x.k === undefined);
+    const outerTile = outer ? existing.get(cellKey(outer.cell.i, outer.cell.j)) : null;
+    // Tags: one of the two tiles carries exactly these tags on the edge; adjacency rules make the
+    // other side compatible with them.
+    if (m.tags.length) {
+      if (inside.length === 2) {
+        const [A, B] = inside;
+        shared.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, tags: m.tags });
+      } else if (!outerTile || !tagsMatch(outerTile.tags[outer.side], m.tags)) {
+        ensure(inside[0].k, inside[0].side).require = m.tags;
+      }
+    }
+    // Features: one of the two tiles draws that kind of door on the edge.
+    if (m.features.length) {
+      if (inside.length === 2) {
+        const [A, B] = inside;
+        for (const feature of m.features) shared.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, feature });
+      } else {
+        const outerFeatures = outerTile?.features?.[outer.side] ?? [];
+        const missing = m.features.filter(f => !outerFeatures.includes(f));
+        if (missing.length) {
+          const c = ensure(inside[0].k, inside[0].side);
+          c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), ...missing]);
+        }
       }
     }
   }
-  log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${appliedMarkers}/${markers.length} markers inside the outline, ${sharedFeatures.length} shared feature requirements`);
+  log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${appliedMarkers}/${markers.length} markers inside the outline, ${shared.length} shared edge requirements`);
 
   const started = performance.now();
-  const result = solve({ cells, variants, boundaryTags, constraints, sharedFeatures, seed: String(seed) });
+  const result = solve({ cells, variants, boundaryTags, compatible, constraints, shared, seed: String(seed) });
   log.debug(`solve finished in ${Math.round(performance.now() - started)} ms`, { success: result.success, attempts: result.attempts, failedCell: result.failedCell });
   if (!result.success) {
     const cell = result.failedCell;

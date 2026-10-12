@@ -10,7 +10,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const SIZE = 128;
-const BAND = 12; // wall thickness in pixels
+const BAND = 10; // wall thickness in pixels, drawn by one tile only
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../collections/sample-dungeon");
 
 // ---------- tiny PNG encoder ----------
@@ -147,9 +147,12 @@ function sideWalls(side, door = false) {
 }
 
 /**
- * Tile definitions: which sides are walls ("w"), half doors ("d", tagged door so the neighbour
- * draws the other half), full doors ("D", tagged wall so any wall neighbour fits) or open floor
- * ("f"). `midDoor` adds a door across the middle of the tile.
+ * Tile definitions: which sides are walls ("w"), doors ("d") or open floor ("f").
+ *
+ * Walls are one-sided: the tile with a "w" or "d" side draws the whole wall band or door, and the
+ * tile on the other side of that edge must show plain floor up to the edge. That is expressed by
+ * the collection's compatibility table (wall and door sides may only face floor sides), so walls
+ * are never doubled and a door always opens onto floor. `midDoor` adds a door across the tile.
  */
 const TILES = [
   { file: "floor.png", sides: "ffff", weight: 4, rotate: false, base: "floor" },
@@ -161,17 +164,17 @@ const TILES = [
   { file: "door-1.png", sides: "dfff", weight: 0.6, rotate: true, base: "floor" },
   { file: "door-corner.png", sides: "dwff", weight: 0.5, rotate: true, base: "floor" },
   { file: "door-3.png", sides: "dwfw", weight: 0.4, rotate: true, base: "floor" },
-  { file: "door-wall.png", sides: "Dfff", weight: 0.5, rotate: true, base: "floor" },
   { file: "door-mid.png", sides: "wfwf", weight: 0.5, rotate: true, base: "floor", midDoor: true }
 ];
-const TAG = { f: ["floor"], w: ["wall"], d: ["door"], D: ["wall"] };
+const TAG = { f: ["floor"], w: ["wall"], d: ["door"] };
 
 fs.mkdirSync(OUT, { recursive: true });
 const mapping = {
   version: 1,
   name: "Sample dungeon",
-  description: "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline. door-wall.png draws a complete door on a wall-tagged side, door-mid.png has a door across the middle; restrict \"door\" to place them only at markers.",
+  description: "Simple generated stone tiles with one-sided walls. Side tags: floor, wall, door. A wall or door side may only face a floor side, so walls are drawn once and doors open onto floor. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
   boundary: ["wall"],
+  compatible: { wall: ["floor"], door: ["floor"] },
   tiles: {}
 };
 TILES.forEach((def, index) => {
@@ -183,7 +186,7 @@ TILES.forEach((def, index) => {
     const kind = def.sides[k];
     tags[side] = TAG[kind];
     if (kind === "w") { wallBand(r, side); walls.push(...sideWalls(side)); }
-    if (kind === "d" || kind === "D") { wallBand(r, side, DOOR_GAP); walls.push(...sideWalls(side, true)); }
+    if (kind === "d") { wallBand(r, side, DOOR_GAP); walls.push(...sideWalls(side, true)); }
   });
   if (def.midDoor) {
     // A door across the middle of the tile, between the north and south walls.

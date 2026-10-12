@@ -1,6 +1,6 @@
 import { TEMPLATES } from "../constants.js";
 import { getFilePicker, listImageFiles, loadCollection, relativeTileFile, saveMapping } from "../collections.js";
-import { describeTags, emptyTileEntry } from "../lib/mapping.js";
+import { describeTags, emptyTileEntry, compatibleToText, compatibleFromText } from "../lib/mapping.js";
 import { normalizeTags } from "../lib/wfc.js";
 import { TileEditor } from "./tile-editor.js";
 
@@ -54,6 +54,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
       description: mapping.description,
       boundary: mapping.boundary.join(", "),
       restricted: mapping.restricted.join(", "),
+      compatible: compatibleToText(mapping.compatible),
       hasMapping: this.collection.hasMapping,
       error: this.collection.error,
       tiles
@@ -68,6 +69,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
     mapping.description = form.elements.description?.value ?? "";
     mapping.boundary = normalizeTags(form.elements.boundary?.value ?? "");
     mapping.restricted = normalizeTags(form.elements.restricted?.value ?? "");
+    mapping.compatible = compatibleFromText(form.elements.compatible?.value ?? "");
   }
 
   async save() {
