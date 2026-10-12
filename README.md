@@ -101,9 +101,10 @@ Select **Door and edge markers (WFC)** in the Tiles controls.
 Select **Zones (WFC)** and outline an area the same way as a dungeon outline. When you close it, a
 prompt asks which kind of zone it is:
 
-- **Floor only**: every edge between two cells of the zone must carry the *open tags* (default
-  `floor`) and every edge around the zone the *border tags* (default `wall`). The result is one
-  open room with walls around it. Leave the border tags empty to let the generator decide.
+- **Floor only**: nothing from the *not allowed inside* list (default `wall, door`) may appear on
+  an edge between two cells of the zone, and every edge around the zone must carry the *border
+  tags* (default `wall`). The result is one open room with walls around it. Leave the border tags
+  empty to let the generator decide.
 - **No tiles**: the zone stays blank. The generator treats it as outside, removes anything it placed
   there before, puts walls along its border and applies the boundary tags to the tiles around it.
 
@@ -160,15 +161,19 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 
 Two conventions work:
 
-1. **Centered walls** (the sample): the wall sits on the grid line and both tiles draw their half of
-   the band, so both sides are tagged `wall` and need no compatibility table. A straight wall is
-   always straight because every half is in the same place relative to the line. Keep the halves
-   thin. Doors work the same way: both tiles draw half of the door and both sides are tagged `door`.
-   Identical wall segments are deduplicated, so the Foundry wall is still single.
-2. **One-sided walls**: the tile tagged `wall` draws the whole band inside its own area and the
-   neighbour shows floor up to the edge, enforced with the compatibility table `wall: floor`. This
-   suits art with thick walls, but along a straight line the band may switch sides from cell to
-   cell unless your side tags also encode where the band is.
+1. **One-sided walls** (the sample): the tile tagged `wall` draws the whole band inside its own
+   area and the neighbour shows floor up to the edge. The compatibility table `wall: floor...`
+   lets a wall side face any floor side and keeps two wall sides apart, so a wall is never doubled
+   and a plain floor tile fits against any wall. To keep straight walls on the same side of the grid
+   line, floor sides record which of their corners carry a band: `floor-e` on a north side means
+   "my east side is a wall", so the tile above must continue that wall on its own east side. The
+   sample generates these tags and bakes rotations into separate images, because the corner
+   markers are absolute. Any floor tag (`floor`, `floor-e`, `floor-ns`, ...) is compatible with
+   `wall` and `door`.
+2. **Centered walls**: the wall sits on the grid line and both tiles draw their half of the band,
+   so both sides are tagged `wall` and need no compatibility table. Straight walls are always
+   straight, and doors must be drawn half by each tile with both sides tagged `door`. Identical
+   wall segments are deduplicated, so the Foundry wall is still single.
 
 ### Doors
 
@@ -178,9 +183,9 @@ A door is any wall segment of type *Door* or *Secret door* in the tile editor. T
 - A door segment lying on a tile edge is a door feature of that side.
 - Any other door segment is a door feature of the tile center.
 
-With centered walls both tiles draw half of the door and tag that side `door`, so door tiles pair
-up and a door never leads into a wall. With one-sided walls a door tile draws the complete door and
-the compatibility table (`door: floor`) makes it face plain floor. Should a plain wall segment ever
+With one-sided walls a door tile draws the complete door, tags that side `door`, and the
+compatibility table makes it face a floor side, so a door never leads into a wall. With centered
+walls both tiles draw half of the door and tag that side `door`. Should a plain wall segment ever
 share a line with a door, the wall is cut away around the door span so it stays passable.
 
 A door in the middle of a tile (`door-mid.png`) is a center feature and can be demanded with a cell
@@ -220,8 +225,9 @@ You can edit the file by hand; the collection editor reloads it from disk.
 
 ## Sample collection
 
-`collections/sample-dungeon` ships with ten generated stone tiles using the tags `floor`, `wall`
-and `door` with thin centered walls, including a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
+`collections/sample-dungeon` ships with thirty generated stone tiles (ten shapes with their
+rotations baked in) using one-sided walls, the tags `wall`, `door` and the `floor-*` family with
+corner markers, a compatibility table, and a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
 `npm run sample-tiles`.
 
 ## API

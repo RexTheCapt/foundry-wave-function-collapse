@@ -159,15 +159,15 @@ test("cellsInPolygonExcluding separates void cells", () => {
   assert.equal(none.voids.length, 0);
 });
 
-test("zone side rules: open tags inside, border tags around, nothing elsewhere", async () => {
+test("zone side rules: forbid inside, border tags around, nothing elsewhere", async () => {
   const { zoneSideRule, zoneAtCell } = await import("../scripts/lib/zones.js");
-  const zones = [{ type: "open", polygon: [[100, 100], [300, 100], [300, 300], [100, 300]], tags: ["floor"], border: ["wall"] }];
+  const zones = [{ type: "open", polygon: [[100, 100], [300, 100], [300, 300], [100, 300]], forbid: ["wall", "door"], border: ["wall"] }];
   assert.equal(zoneAtCell(zones, { i: 1, j: 1 }, 100), zones[0]);
   assert.equal(zoneAtCell(zones, { i: 0, j: 1 }, 100), null);
-  assert.deepEqual(zoneSideRule(zones, { i: 1, j: 1 }, "e", 100), { require: ["floor"], reason: "inside" });
+  assert.deepEqual(zoneSideRule(zones, { i: 1, j: 1 }, "e", 100), { forbid: ["wall", "door"], reason: "inside" });
   assert.deepEqual(zoneSideRule(zones, { i: 1, j: 1 }, "n", 100), { require: ["wall"], reason: "border" });
   assert.equal(zoneSideRule(zones, { i: 0, j: 1 }, "s", 100), null);
-  const empty = [{ type: "empty", polygon: zones[0].polygon, tags: [], border: [] }];
+  const empty = [{ type: "empty", polygon: zones[0].polygon, forbid: [], border: [] }];
   assert.equal(zoneSideRule(empty, { i: 1, j: 1 }, "e", 100), null);
   const noBorder = [{ ...zones[0], border: [] }];
   assert.equal(zoneSideRule(noBorder, { i: 1, j: 1 }, "n", 100), null);

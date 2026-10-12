@@ -1,10 +1,11 @@
 /**
  * Zone rules. Pure functions, no Foundry dependencies.
  *
- * A zone is { type: "empty" | "open", polygon: [[x, y], ...], tags: string[], border: string[] }.
+ * A zone is { type: "empty" | "open", polygon: [[x, y], ...], forbid: string[], border: string[] }.
  * - "empty": cells inside get no tile and count as outside.
- * - "open": edges between two cells of the zone must carry `tags` (e.g. floor) on both sides,
- *   edges from a zone cell to any other cell must carry `border` (e.g. wall) on the zone side.
+ * - "open": edges between two cells of the zone must not carry any of the `forbid` tags or door
+ *   features named there (e.g. wall, door), and edges from a zone cell to any other cell must
+ *   carry the `border` tags (e.g. wall) on the zone side.
  */
 
 import { pointInPolygon } from "./geometry.js";
@@ -18,9 +19,9 @@ export function zoneAtCell(zones, cell, size) {
 }
 
 /**
- * Tag requirement an open zone imposes on one side of a cell, or null when the cell is not in an
- * open zone or the zone has no tags for that case.
- * @returns {{require: string[], reason: "inside"|"border"}|null}
+ * Rule an open zone imposes on one side of a cell, or null when the cell is not in an open zone
+ * or the zone has nothing to say about that side.
+ * @returns {{require?: string[], forbid?: string[], reason: "inside"|"border"}|null}
  */
 export function zoneSideRule(zones, cell, side, size) {
   const zone = zoneAtCell(zones, cell, size);
@@ -28,6 +29,6 @@ export function zoneSideRule(zones, cell, side, size) {
   const [di, dj] = DELTAS[side];
   const neighbor = { i: cell.i + di, j: cell.j + dj };
   const same = zoneAtCell(zones, neighbor, size) === zone;
-  if (same) return zone.tags.length ? { require: zone.tags, reason: "inside" } : null;
-  return zone.border.length ? { require: zone.border, reason: "border" } : null;
+  if (same) return zone.forbid?.length ? { forbid: zone.forbid, reason: "inside" } : null;
+  return zone.border?.length ? { require: zone.border, reason: "border" } : null;
 }

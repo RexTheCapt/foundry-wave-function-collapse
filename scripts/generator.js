@@ -188,8 +188,11 @@ export async function generateDungeon({
       const rule = zoneSideRule(zones, cell, side, size);
       if (!rule) continue;
       const c = ensure(k, side);
-      c.require = rule.require;
-      delete c.compatibleWith;
+      if (rule.require) { c.require = rule.require; delete c.compatibleWith; }
+      if (rule.forbid) {
+        c.forbid = normalizeTags([...(c.forbid ?? []), ...rule.forbid]);
+        c.forbidFeatures = normalizeTags([...(c.forbidFeatures ?? []), ...rule.forbid]);
+      }
       zoneSides++;
     }
   });
@@ -437,7 +440,12 @@ export async function candidatesForCell(cell, collectionDirs, { restrictedTags =
     const m = edgeMarkers.get(edgeKey(cellSideEdge(cell, side, size)));
     if (!m) {
       const rule = zoneSideRule(zones, cell, side, size);
-      if (rule) { ensure(side).require = rule.require; delete constraints[side].compatibleWith; }
+      if (rule?.require) { ensure(side).require = rule.require; delete constraints[side].compatibleWith; }
+      if (rule?.forbid) {
+        const c = ensure(side);
+        c.forbid = normalizeTags([...(c.forbid ?? []), ...rule.forbid]);
+        c.forbidFeatures = normalizeTags([...(c.forbidFeatures ?? []), ...rule.forbid]);
+      }
       continue;
     }
     const c = ensure(side);

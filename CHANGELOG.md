@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+- Sample collection rebuilt with one-sided walls and compatible tags: the tile tagged `wall` draws
+  the band, any floor side fits against it, and corner markers in the floor tags (`floor-e`,
+  `floor-ns`, ...) keep straight walls on one side of the grid line. Rotations are baked into
+  separate images (thirty tiles). Remove previously generated dungeons before regenerating.
+- Floor-only zones now forbid tags and door types inside ("not allowed inside", default
+  `wall, door`) instead of requiring an exact open tag, so they work with any tag vocabulary.
+  Zones saved by 0.6.0 are migrated.
+
 ## 0.7.1
 
 - Fixed the tile editor rejecting most weights: the number input only accepted values on a 0.1

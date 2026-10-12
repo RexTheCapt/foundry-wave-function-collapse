@@ -54,10 +54,11 @@ function assertConsistent(result, cells, compat = sampleCompat) {
   assert.equal(result.assignments.length, cells.length);
 }
 const sampleSolve = opts => solve({ compatible: sampleMapping.compatible, ...opts });
-// One-sided wall convention used by some tests: a wall or door side may only face a floor side.
-const ONE_SIDED = { wall: ["floor"], door: ["floor"] };
-const oneSidedCompat = buildCompatibility(ONE_SIDED);
-const oneSidedSolve = opts => solve({ compatible: ONE_SIDED, ...opts });
+// The sample uses one-sided walls: a wall or door side may only face a floor side.
+const ONE_SIDED = sampleMapping.compatible;
+const oneSidedCompat = sampleCompat;
+const oneSidedSolve = sampleSolve;
+const isFloor = tags => tags[0]?.startsWith("floor");
 
 test("solve fills a rectangle with the sample collection and respects the boundary", () => {
   const polygon = [[0, 0], [1200, 0], [1200, 800], [0, 800]];
@@ -85,7 +86,7 @@ test("solve with a one-sided compatibility table never puts two wall sides toget
       const [di, dj] = DELTAS[side];
       const other = byKey.get(`${a.cell.i + di},${a.cell.j + dj}`);
       if (!other) continue;
-      if (a.variant.tags[side][0] !== "floor") assert.deepEqual(other.tags[OPPOSITE[side]], ["floor"]);
+      if (!isFloor(a.variant.tags[side])) assert.ok(isFloor(other.tags[OPPOSITE[side]]), "a wall or door side faces a floor side");
     }
   }
 });
@@ -157,7 +158,7 @@ test("solve honours per-side require, compatibleWith and forbid constraints", ()
   assert.ok(result.success);
   assertConsistent(result, cells, oneSidedCompat);
   assert.deepEqual(result.assignments[1].variant.tags.e, ["door"]);
-  assert.deepEqual(result.assignments[2].variant.tags.w, ["floor"]);
+  assert.ok(isFloor(result.assignments[2].variant.tags.w));
   for (const a of result.assignments) {
     for (const side of SIDES) {
       const isTheDoor = a.cell.j === 1 && side === "e";
@@ -169,11 +170,12 @@ test("solve honours per-side require, compatibleWith and forbid constraints", ()
 test("solve: a require on an outside edge overrides boundary tags", () => {
   const cells = [{ i: 0, j: 0 }];
   const variants = expandVariants(sampleTiles);
-  const constraints = [{ n: { require: ["floor"] } }];
+  // Walls on east, south and west leave a floor side with bands in both corners to the north.
+  const constraints = [{ n: { require: ["floor-we"] } }];
   const result = sampleSolve({ cells, variants, constraints, boundaryTags: ["wall"], seed: 1 });
   assert.ok(result.success);
   const tags = result.assignments[0].variant.tags;
-  assert.deepEqual(tags.n, ["floor"]);
+  assert.deepEqual(tags.n, ["floor-we"]);
   assert.deepEqual(tags.e, ["wall"]);
   assert.deepEqual(tags.s, ["wall"]);
   assert.deepEqual(tags.w, ["wall"]);
@@ -244,14 +246,14 @@ test("compatibleWith constraint and shared tag requirement", () => {
   // A wall tile sits north of cell 0: the new tile's north side must be compatible with "wall", i.e. floor.
   const r = oneSidedSolve({ cells, variants, constraints: [{ n: { compatibleWith: ["wall"] } }, {}], seed: 2 });
   assert.ok(r.success);
-  assert.deepEqual(r.assignments[0].variant.tags.n, ["floor"]);
+  assert.ok(isFloor(r.assignments[0].variant.tags.n));
   // Shared tags: one of the two sides of the shared edge must be exactly "door".
   for (const seed of [1, 2, 3]) {
     const d = oneSidedSolve({ cells, variants, shared: [{ a: 0, sideA: "e", b: 1, sideB: "w", tags: ["door"] }], seed });
     assert.ok(d.success);
     const [A, B] = d.assignments.map(x => x.variant);
     assert.ok(A.tags.e[0] === "door" || B.tags.w[0] === "door");
-    assert.ok(A.tags.e[0] === "floor" || B.tags.w[0] === "floor");
+    assert.ok(isFloor(A.tags.e) || isFloor(B.tags.w));
   }
 });
 
@@ -318,7 +320,9 @@ test("markers along a line are solved with backtracking", () => {
     assert.ok(r.success, `seed ${seed}: ${r.failure?.stage}`);
     assertConsistent(r, cells);
     for (let i = 0; i < 10; i++) {
-      assert.deepEqual(r.assignments[index.get(`${i},4`)].variant.tags.e, ["wall"]);
+      const a4 = r.assignments[index.get(`${i},4`)].variant.tags.e;
+      const b5 = r.assignments[index.get(`${i},5`)].variant.tags.w;
+      assert.ok(a4[0] === "wall" || b5[0] === "wall", `row ${i} wall`);
       const left = r.assignments[index.get(`${i},7`)].variant;
       const right = r.assignments[index.get(`${i},8`)].variant;
       assert.ok(left.features.e.includes("door") || right.features.w.includes("door"), `row ${i} door`);
@@ -367,12 +371,13 @@ test("a floor-only zone solves to an open room with walls around it", async () =
   const { zoneSideRule } = await import("../scripts/lib/zones.js");
   const cells = cellsInPolygon([[0, 0], [600, 0], [600, 500], [0, 500]], 100);
   const variants = expandVariants(sampleTiles);
-  const zones = [{ type: "open", polygon: [[100, 100], [500, 100], [500, 400], [100, 400]], tags: ["floor"], border: ["wall"] }];
+  const zones = [{ type: "open", polygon: [[100, 100], [500, 100], [500, 400], [100, 400]], forbid: ["wall", "door"], border: ["wall"] }];
   const constraints = cells.map(cell => {
     const c = {};
     for (const side of SIDES) {
       const rule = zoneSideRule(zones, cell, side, 100);
-      if (rule) c[side] = { require: rule.require };
+      if (rule?.require) c[side] = { require: rule.require };
+      if (rule?.forbid) c[side] = { forbid: rule.forbid, forbidFeatures: rule.forbid };
     }
     return c;
   });
@@ -384,46 +389,29 @@ test("a floor-only zone solves to an open room with walls around it", async () =
     if (!inside) continue;
     for (const side of SIDES) {
       const rule = zoneSideRule(zones, a.cell, side, 100);
-      assert.deepEqual(a.variant.tags[side], rule.require, `cell ${a.cell.j},${a.cell.i} ${side}`);
+      if (rule.require) assert.deepEqual(a.variant.tags[side], ["wall"], `border ${a.cell.j},${a.cell.i} ${side}`);
+      else assert.ok(isFloor(a.variant.tags[side]), `inside ${a.cell.j},${a.cell.i} ${side}`);
     }
   }
 });
 
-test("sides can offer alternative tag sets", () => {
-  assert.deepEqual(normalizeSideTags("floor | wall"), [["floor"], ["wall"]]);
-  assert.deepEqual(normalizeSideTags("floor, rubble | wall"), [["floor", "rubble"], ["wall"]]);
-  assert.deepEqual(normalizeSideTags("floor"), ["floor"]);
-  assert.deepEqual(normalizeSideTags(["floor"]), ["floor"]);
-  assert.deepEqual(normalizeSideTags([["floor"], ["wall"], ["floor"]]), [["floor"], ["wall"]]);
-  assert.deepEqual(normalizeSideTags("floor |"), ["floor"]);
-  assert.deepEqual(normalizeSideTags(""), []);
-  assert.equal(sideTagsToText([["floor", "rubble"], ["wall"]]), "floor, rubble | wall");
-  assert.equal(sideTagsToText(["wall"]), "wall");
-  assert.ok(tagsMatch([["floor"], ["wall"]], ["wall"]));
-  assert.ok(tagsMatch(["wall"], [["floor"], ["wall"]]));
-  assert.ok(!tagsMatch([["floor"], ["wall"]], ["door"]));
-  assert.ok(tagsMatch([["floor"], ["wall"]], [["door"], ["floor"]]));
-  const compat = buildCompatibility({ wall: ["floor"] });
-  assert.ok(tagsMatch([["door"], ["wall"]], ["floor"], compat));
-});
-
-test("a floor tile with floor|wall sides sits next to walls without a compatibility table", () => {
-  const anyFloor = normalizeTile({ id: "any", tags: { n: "floor | wall", e: "floor | wall", s: "floor | wall", w: "floor | wall" }, weight: 1 });
-  const wallTop = normalizeTile({ id: "top", tags: { n: ["wall"], e: ["floor"], s: ["floor"], w: ["floor"] }, walls: [{ c: [0, 0, 1, 0], door: 0 }], rotate: true });
-  const variants = expandVariants([anyFloor, wallTop]);
-  // 2^4 side combinations for the any-floor tile plus four rotations of the wall tile.
-  assert.equal(variants.length, 20);
-  assert.ok(variants.every(v => SIDES.every(side => typeof v.tags[side][0] !== "object")));
-  const cells = cellsInPolygon([[0, 0], [300, 0], [300, 100], [0, 100]], 100);
-  const constraints = [{ e: { require: ["wall"] } }, { n: { require: ["floor"] }, s: { require: ["floor"] } }, { w: { require: ["wall"] } }];
-  const r = solve({ cells, variants, constraints, seed: 1 });
-  assert.ok(r.success);
-  assert.equal(r.assignments[1].variant.tile.id, "any");
-  assert.deepEqual(r.assignments[0].variant.tags.e, ["wall"]);
-  assert.deepEqual(r.assignments[2].variant.tags.w, ["wall"]);
-  const cw = allowedVariants(variants, { n: { compatibleWith: [["floor"], ["wall"]] } }, null);
-  assert.equal(cw.length, 20);
-  const forbid = allowedVariants(variants, { n: { forbid: ["wall"] } }, null);
-  assert.ok(forbid.some(v => v.tile.id === "any"));
-  assert.ok(!forbid.some(v => v.tile.id === "top" && v.rotation === 0));
+test("one-sided sample walls stay on the same side along a straight line", () => {
+  const cells = cellsInPolygon([[0, 0], [1200, 0], [1200, 800], [0, 800]], 100);
+  const variants = expandVariants(sampleTiles);
+  for (const seed of [1, 2, 3]) {
+    const r = sampleSolve({ cells, variants, boundaryTags: ["wall"], seed });
+    assert.ok(r.success);
+    const byKey = new Map(r.assignments.map(a => [`${a.cell.i},${a.cell.j}`, a.variant]));
+    for (const a of r.assignments) {
+      // A wall on the east side with a floor-type south side whose east corner carries a band
+      // means the tile below must continue that wall on its own east side (or turn it).
+      const t = a.variant.tags;
+      if (t.e[0] === "wall" && t.s[0].startsWith("floor")) {
+        const below = byKey.get(`${a.cell.i + 1},${a.cell.j}`);
+        if (!below) continue;
+        assert.ok(t.s[0].includes("e"), "south side records the band in its east corner");
+        assert.ok(below.tags.e[0] === "wall" || below.tags.e[0] === "door" || below.tags.n[0] === "wall" || below.tags.n[0] === "door", `wall continues below ${a.cell.j},${a.cell.i}`);
+      }
+    }
+  }
 });

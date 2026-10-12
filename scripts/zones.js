@@ -16,7 +16,10 @@ function normalizeZone(raw) {
     : [];
   if (polygon.length < 3) return null;
   const type = raw.type === "open" ? "open" : "empty";
-  return { type, polygon, tags: normalizeTags(raw.tags), border: normalizeTags(raw.border) };
+  const border = normalizeTags(raw.border);
+  // Zones saved by 0.6.0 stored "open tags" instead of forbidden tags: forbid the border and doors.
+  const forbid = raw.forbid !== undefined ? normalizeTags(raw.forbid) : normalizeTags([...border, "door"]);
+  return { type, polygon, forbid, border };
 }
 
 /** Zones stored on a scene. Legacy empty areas are read as empty zones. */
@@ -72,13 +75,13 @@ export async function promptZone(polygon) {
       </select></div>
       <p class="hint">${game.i18n.localize("WFC.Zones.TypeHint")}</p></div>
     <div class="form-group">
-      <label>${game.i18n.localize("WFC.Zones.Tags")}</label>
-      <div class="form-fields"><input type="text" name="tags" value="${esc(last.tags ?? "floor")}" placeholder="floor"></div>
-      <p class="hint">${game.i18n.localize("WFC.Zones.TagsHint")}</p></div>
-    <div class="form-group">
       <label>${game.i18n.localize("WFC.Zones.Border")}</label>
       <div class="form-fields"><input type="text" name="border" value="${esc(last.border ?? "wall")}" placeholder="wall"></div>
-      <p class="hint">${game.i18n.localize("WFC.Zones.BorderHint")}</p></div>`;
+      <p class="hint">${game.i18n.localize("WFC.Zones.BorderHint")}</p></div>
+    <div class="form-group">
+      <label>${game.i18n.localize("WFC.Zones.Forbid")}</label>
+      <div class="form-fields"><input type="text" name="forbid" value="${esc(last.forbid ?? "wall, door")}" placeholder="wall, door"></div>
+      <p class="hint">${game.i18n.localize("WFC.Zones.ForbidHint")}</p></div>`;
   const result = await foundry.applications.api.DialogV2.prompt({
     window: { title: game.i18n.localize("WFC.Zones.Title"), icon: "fa-solid fa-vector-square" },
     content,
@@ -87,7 +90,7 @@ export async function promptZone(polygon) {
       icon: "fa-solid fa-check",
       callback: (event, button) => ({
         type: button.form.elements.type.value,
-        tags: button.form.elements.tags.value,
+        forbid: button.form.elements.forbid.value,
         border: button.form.elements.border.value
       })
     },
@@ -95,5 +98,5 @@ export async function promptZone(polygon) {
   });
   if (!result) return null;
   await game.settings.set(MODULE_ID, "lastZone", result);
-  return { type: result.type, polygon, tags: normalizeTags(result.tags), border: normalizeTags(result.border) };
+  return { type: result.type, polygon, forbid: normalizeTags(result.forbid), border: normalizeTags(result.border) };
 }

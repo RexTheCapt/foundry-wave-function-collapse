@@ -145,7 +145,7 @@ export class MarkerLayer {
       }
       const text = z.type === "empty"
         ? game.i18n.localize("WFC.Zones.Empty")
-        : `${game.i18n.localize("WFC.Zones.Open")}: ${z.tags.join(", ") || "*"} / ${z.border.join(", ") || "*"}`;
+        : `${game.i18n.localize("WFC.Zones.Open")}: ${z.border.join(", ") || "*"}`;
       zoneLabels.push({ text, x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
     }
     const style = {

@@ -1,11 +1,30 @@
 {
   "version": 1,
   "name": "Sample dungeon",
-  "description": "Simple generated stone tiles. Walls are centered on the grid line and drawn half by each tile, so side tags match like for like: floor, wall, door. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
+  "description": "Simple generated stone tiles with one-sided walls: the tile tagged wall draws the band, any floor side may face it, and corner markers on floor sides keep walls straight. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
   "boundary": [
     "wall"
   ],
-  "compatible": {},
+  "compatible": {
+    "wall": [
+      "floor",
+      "floor-w",
+      "floor-e",
+      "floor-we",
+      "floor-n",
+      "floor-s",
+      "floor-ns"
+    ],
+    "door": [
+      "floor",
+      "floor-w",
+      "floor-e",
+      "floor-we",
+      "floor-n",
+      "floor-s",
+      "floor-ns"
+    ]
+  },
   "tiles": {
     "floor.png": {
       "tags": {
@@ -32,13 +51,13 @@
           "wall"
         ],
         "e": [
-          "floor"
+          "floor-n"
         ],
         "s": [
           "floor"
         ],
         "w": [
-          "floor"
+          "floor-n"
         ]
       },
       "walls": [
@@ -53,7 +72,94 @@
         }
       ],
       "weight": 3,
-      "rotate": true
+      "rotate": false
+    },
+    "wall-1-90.png": {
+      "tags": {
+        "n": [
+          "floor-e"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor-e"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 3,
+      "rotate": false
+    },
+    "wall-1-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor-s"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor-s"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 3,
+      "rotate": false
+    },
+    "wall-1-270.png": {
+      "tags": {
+        "n": [
+          "floor-w"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor-w"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 3,
+      "rotate": false
     },
     "wall-corner.png": {
       "tags": {
@@ -64,10 +170,10 @@
           "wall"
         ],
         "s": [
-          "floor"
+          "floor-e"
         ],
         "w": [
-          "floor"
+          "floor-n"
         ]
       },
       "walls": [
@@ -91,7 +197,121 @@
         }
       ],
       "weight": 2,
-      "rotate": true
+      "rotate": false
+    },
+    "wall-corner-90.png": {
+      "tags": {
+        "n": [
+          "floor-e"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor-s"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 2,
+      "rotate": false
+    },
+    "wall-corner-180.png": {
+      "tags": {
+        "n": [
+          "floor-w"
+        ],
+        "e": [
+          "floor-s"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 2,
+      "rotate": false
+    },
+    "wall-corner-270.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor-n"
+        ],
+        "s": [
+          "floor-w"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 2,
+      "rotate": false
     },
     "wall-corridor.png": {
       "tags": {
@@ -99,13 +319,13 @@
           "wall"
         ],
         "e": [
-          "floor"
+          "floor-ns"
         ],
         "s": [
           "wall"
         ],
         "w": [
-          "floor"
+          "floor-ns"
         ]
       },
       "walls": [
@@ -129,7 +349,45 @@
         }
       ],
       "weight": 1.5,
-      "rotate": true
+      "rotate": false
+    },
+    "wall-corridor-90.png": {
+      "tags": {
+        "n": [
+          "floor-we"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor-we"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 1.5,
+      "rotate": false
     },
     "wall-3.png": {
       "tags": {
@@ -140,7 +398,7 @@
           "wall"
         ],
         "s": [
-          "floor"
+          "floor-we"
         ],
         "w": [
           "wall"
@@ -176,7 +434,148 @@
         }
       ],
       "weight": 0.6,
-      "rotate": true
+      "rotate": false
+    },
+    "wall-3-90.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor-ns"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
+    },
+    "wall-3-180.png": {
+      "tags": {
+        "n": [
+          "floor-we"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
+    },
+    "wall-3-270.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor-ns"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
     },
     "rock.png": {
       "tags": {
@@ -240,13 +639,13 @@
           "door"
         ],
         "e": [
-          "floor"
+          "floor-n"
         ],
         "s": [
           "floor"
         ],
         "w": [
-          "floor"
+          "floor-n"
         ]
       },
       "walls": [
@@ -279,7 +678,148 @@
         }
       ],
       "weight": 0.6,
-      "rotate": true
+      "rotate": false
+    },
+    "door-1-90.png": {
+      "tags": {
+        "n": [
+          "floor-e"
+        ],
+        "e": [
+          "door"
+        ],
+        "s": [
+          "floor-e"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            0.35
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0.35,
+            1,
+            0.65
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            1,
+            0.65,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
+    },
+    "door-1-180.png": {
+      "tags": {
+        "n": [
+          "floor"
+        ],
+        "e": [
+          "floor-s"
+        ],
+        "s": [
+          "door"
+        ],
+        "w": [
+          "floor-s"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0.65,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.65,
+            1,
+            0.35,
+            1
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.35,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
+    },
+    "door-1-270.png": {
+      "tags": {
+        "n": [
+          "floor-w"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor-w"
+        ],
+        "w": [
+          "door"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0.65
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0.65,
+            0,
+            0.35
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0,
+            0.35,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.6,
+      "rotate": false
     },
     "door-corner.png": {
       "tags": {
@@ -290,10 +830,10 @@
           "wall"
         ],
         "s": [
-          "floor"
+          "floor-e"
         ],
         "w": [
-          "floor"
+          "floor-n"
         ]
       },
       "walls": [
@@ -335,7 +875,175 @@
         }
       ],
       "weight": 0.5,
-      "rotate": true
+      "rotate": false
+    },
+    "door-corner-90.png": {
+      "tags": {
+        "n": [
+          "floor-e"
+        ],
+        "e": [
+          "door"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor-s"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            0.35
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0.35,
+            1,
+            0.65
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            1,
+            0.65,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.5,
+      "rotate": false
+    },
+    "door-corner-180.png": {
+      "tags": {
+        "n": [
+          "floor-w"
+        ],
+        "e": [
+          "floor-s"
+        ],
+        "s": [
+          "door"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0.65,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.65,
+            1,
+            0.35,
+            1
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.35,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.5,
+      "rotate": false
+    },
+    "door-corner-270.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor-n"
+        ],
+        "s": [
+          "floor-w"
+        ],
+        "w": [
+          "door"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0.65
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0.65,
+            0,
+            0.35
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0,
+            0.35,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.5,
+      "rotate": false
     },
     "door-3.png": {
       "tags": {
@@ -346,7 +1054,7 @@
           "wall"
         ],
         "s": [
-          "floor"
+          "floor-we"
         ],
         "w": [
           "wall"
@@ -400,7 +1108,202 @@
         }
       ],
       "weight": 0.4,
-      "rotate": true
+      "rotate": false
+    },
+    "door-3-90.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "door"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor-ns"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            0.35
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0.35,
+            1,
+            0.65
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            1,
+            0.65,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0,
+            0,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "door-3-180.png": {
+      "tags": {
+        "n": [
+          "floor-we"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "door"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            1,
+            0.65,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.65,
+            1,
+            0.35,
+            1
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.35,
+            1,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.4,
+      "rotate": false
+    },
+    "door-3-270.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor-ns"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "door"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            1,
+            0,
+            0.65
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0.65,
+            0,
+            0.35
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0,
+            0.35,
+            0,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.4,
+      "rotate": false
     },
     "door-mid.png": {
       "tags": {
@@ -408,13 +1311,13 @@
           "wall"
         ],
         "e": [
-          "floor"
+          "floor-ns"
         ],
         "s": [
           "wall"
         ],
         "w": [
-          "floor"
+          "floor-ns"
         ]
       },
       "walls": [
@@ -447,7 +1350,54 @@
         }
       ],
       "weight": 0.5,
-      "rotate": true
+      "rotate": false
+    },
+    "door-mid-90.png": {
+      "tags": {
+        "n": [
+          "floor-we"
+        ],
+        "e": [
+          "wall"
+        ],
+        "s": [
+          "floor-we"
+        ],
+        "w": [
+          "wall"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            1,
+            0,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            1,
+            0.5,
+            0,
+            0.5
+          ],
+          "door": 1
+        }
+      ],
+      "weight": 0.5,
+      "rotate": false
     }
   }
 }

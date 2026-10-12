@@ -78,7 +78,7 @@ function registerSettings() {
     scope: "client",
     config: false,
     type: Object,
-    default: { type: "open", tags: "floor", border: "wall" }
+    default: { type: "open", forbid: "wall, door", border: "wall" }
   });
   game.settings.register(MODULE_ID, "lastMarker", {
     scope: "client",

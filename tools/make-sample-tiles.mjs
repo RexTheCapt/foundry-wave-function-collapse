@@ -10,7 +10,7 @@ import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const SIZE = 128;
-const BAND = 6; // half wall thickness in pixels: each tile draws its half, centered on the grid line
+const BAND = 10; // wall thickness in pixels: the tile tagged wall draws the whole band inside its own area
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../collections/sample-dungeon");
 
 // ---------- tiny PNG encoder ----------
@@ -147,57 +147,106 @@ function sideWalls(side, door = false) {
 }
 
 /**
- * Tile definitions: which sides are walls ("w"), doors ("d") or open floor ("f").
+ * Base tile definitions: which sides are walls ("w"), doors ("d") or open floor ("f").
  *
- * Walls sit on the grid line between two tiles and each tile draws its half of the band, so a
- * straight wall is always straight and never doubled. A wall side therefore always faces another
- * wall side, and a door side faces a door side (both halves of the door are drawn). `midDoor`
- * adds a door across the middle of the tile.
+ * Walls are one-sided: the tile whose side is tagged "wall" draws the whole band inside its own
+ * area and the tile on the other side shows floor up to the edge. The collection's compatible
+ * tags let a wall or door side face any floor side, while two wall sides never meet.
+ *
+ * To keep walls straight, floor sides remember whether a band ends in their corners:
+ * "floor-e" on a north side means "floor here, but my east side carries a wall", so the tile
+ * above must continue that wall on its own east side. Rotations are generated as separate
+ * images because these corner markers are absolute.
  */
-const TILES = [
-  { file: "floor.png", sides: "ffff", weight: 4, rotate: false, base: "floor" },
-  { file: "wall-1.png", sides: "wfff", weight: 3, rotate: true, base: "floor" },
-  { file: "wall-corner.png", sides: "wwff", weight: 2, rotate: true, base: "floor" },
-  { file: "wall-corridor.png", sides: "wfwf", weight: 1.5, rotate: true, base: "floor" },
-  { file: "wall-3.png", sides: "wwfw", weight: 0.6, rotate: true, base: "floor" },
-  { file: "rock.png", sides: "wwww", weight: 0.4, rotate: false, base: "rock" },
-  { file: "door-1.png", sides: "dfff", weight: 0.6, rotate: true, base: "floor" },
-  { file: "door-corner.png", sides: "dwff", weight: 0.5, rotate: true, base: "floor" },
-  { file: "door-3.png", sides: "dwfw", weight: 0.4, rotate: true, base: "floor" },
-  { file: "door-mid.png", sides: "wfwf", weight: 0.5, rotate: true, base: "floor", midDoor: true }
+const BASES = [
+  { name: "floor", sides: "ffff", weight: 4, base: "floor" },
+  { name: "wall-1", sides: "wfff", weight: 3, base: "floor" },
+  { name: "wall-corner", sides: "wwff", weight: 2, base: "floor" },
+  { name: "wall-corridor", sides: "wfwf", weight: 1.5, base: "floor" },
+  { name: "wall-3", sides: "wwfw", weight: 0.6, base: "floor" },
+  { name: "rock", sides: "wwww", weight: 0.4, base: "rock" },
+  { name: "door-1", sides: "dfff", weight: 0.6, base: "floor" },
+  { name: "door-corner", sides: "dwff", weight: 0.5, base: "floor" },
+  { name: "door-3", sides: "dwfw", weight: 0.4, base: "floor" },
+  { name: "door-mid", sides: "wfwf", weight: 0.5, base: "floor", midDoor: true }
 ];
-const TAG = { f: ["floor"], w: ["wall"], d: ["door"] };
+const SIDE_NAMES = ["n", "e", "s", "w"];
+
+/** Tag of one side, given the side types of the tile. */
+function sideTag(types, side) {
+  const t = types[side];
+  if (t === "w") return "wall";
+  if (t === "d") return "door";
+  const band = x => types[x] === "w" || types[x] === "d";
+  const flags = side === "n" || side === "s"
+    ? (band("w") ? "w" : "") + (band("e") ? "e" : "")
+    : (band("n") ? "n" : "") + (band("s") ? "s" : "");
+  return flags ? `floor-${flags}` : "floor";
+}
+const FLOOR_TAGS = ["floor", "floor-w", "floor-e", "floor-we", "floor-n", "floor-s", "floor-ns"];
+
+/** Rotate a raster 90 degrees clockwise. */
+function rotateRaster(src) {
+  const dst = Buffer.alloc(SIZE * SIZE * 4);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const sx = y;
+      const sy = SIZE - 1 - x;
+      src.copy(dst, (y * SIZE + x) * 4, (sy * SIZE + sx) * 4, (sy * SIZE + sx) * 4 + 4);
+    }
+  }
+  return dst;
+}
+const rotatePoint = ([x, y]) => [1 - y, x];
+const rotateTypes = t => ({ n: t.w, e: t.n, s: t.e, w: t.s });
+const rotateWalls = walls => walls.map(w => ({ ...w, c: [...rotatePoint([w.c[0], w.c[1]]), ...rotatePoint([w.c[2], w.c[3]])] }));
 
 fs.mkdirSync(OUT, { recursive: true });
+for (const f of fs.readdirSync(OUT)) if (f.endsWith(".png")) fs.unlinkSync(path.join(OUT, f));
 const mapping = {
   version: 1,
   name: "Sample dungeon",
-  description: "Simple generated stone tiles. Walls are centered on the grid line and drawn half by each tile, so side tags match like for like: floor, wall, door. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
+  description: "Simple generated stone tiles with one-sided walls: the tile tagged wall draws the band, any floor side may face it, and corner markers on floor sides keep walls straight. Use boundary tag \"wall\" to close the outline; restrict \"door\" to place doors only at markers.",
   boundary: ["wall"],
-  compatible: {},
+  compatible: { wall: FLOOR_TAGS, door: FLOOR_TAGS },
   tiles: {}
 };
-TILES.forEach((def, index) => {
+let count = 0;
+BASES.forEach((def, index) => {
   const r = new Raster(1000 + index);
   if (def.base === "rock") rockBase(r); else floorBase(r);
-  const tags = {};
-  const walls = [];
-  ["n", "e", "s", "w"].forEach((side, k) => {
+  let types = {};
+  let walls = [];
+  SIDE_NAMES.forEach((side, k) => {
     const kind = def.sides[k];
-    tags[side] = TAG[kind];
+    types[side] = kind;
     if (kind === "w") { wallBand(r, side); walls.push(...sideWalls(side)); }
     if (kind === "d") { wallBand(r, side, DOOR_GAP); walls.push(...sideWalls(side, true)); }
   });
   if (def.midDoor) {
-    // A door across the middle of the tile, between the north and south walls.
     const x0 = Math.round(SIZE / 2) - 6;
     r.rect(x0, BAND, 12, SIZE - 2 * BAND, DOOR, 10);
     r.rect(x0, BAND, 1, SIZE - 2 * BAND, DOOR_DARK);
     r.rect(x0 + 11, BAND, 1, SIZE - 2 * BAND, DOOR_DARK);
     walls.push({ c: [0.5, 0, 0.5, 1], door: 1 });
   }
-  fs.writeFileSync(path.join(OUT, def.file), encodePNG(SIZE, SIZE, r.px));
-  mapping.tiles[def.file] = { tags, walls, weight: def.weight, rotate: def.rotate };
+  let px = r.px;
+  const seen = new Set();
+  for (let rot = 0; rot < 4; rot++) {
+    const signature = SIDE_NAMES.map(sd => types[sd]).join("") + (def.midDoor ? `|${rot % 2}` : "");
+    if (!seen.has(signature)) {
+      seen.add(signature);
+      const file = rot === 0 ? `${def.name}.png` : `${def.name}-${rot * 90}.png`;
+      fs.writeFileSync(path.join(OUT, file), encodePNG(SIZE, SIZE, px));
+      const tags = {};
+      for (const sd of SIDE_NAMES) tags[sd] = [sideTag(types, sd)];
+      mapping.tiles[file] = { tags, walls: walls.map(w => ({ ...w, c: w.c.map(v => Math.round(v * 1000) / 1000) })), weight: def.weight, rotate: false };
+      count++;
+    }
+    px = rotateRaster(px);
+    types = rotateTypes(types);
+    walls = rotateWalls(walls);
+  }
 });
 fs.writeFileSync(path.join(OUT, "mapping.json"), JSON.stringify(mapping, null, 2) + "\n");
-console.log(`Wrote ${TILES.length} tiles to ${OUT}`);
+console.log(`Wrote ${count} tiles to ${OUT}`);
