@@ -4,7 +4,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { cellsInPolygon, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
-import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
+import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, describeCellConstraints, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
 import { edgeCellSides } from "./lib/edges.js";
 import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
 import { getMarkers } from "./markers.js";
@@ -101,7 +101,7 @@ async function existingTiles(scene, size) {
  * @param {boolean} [options.placeTileWalls]
  * @param {boolean} [options.clearExisting]
  * @param {boolean} [options.mergeWalls]
- * @returns {Promise<{generationId: string, tiles: number, walls: number}|null>}
+ * @returns {Promise<{ok: boolean, message: string, generationId?: string, tiles?: number, walls?: number}>}
  */
 export async function generateDungeon({
   polygon,
@@ -122,17 +122,15 @@ export async function generateDungeon({
   const cellSet = new Set(cells.map(c => cellKey(c.i, c.j)));
   const cellIndex = new Map(cells.map((c, k) => [cellKey(c.i, c.j), k]));
   log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, gridSize: size });
-  if (!cells.length) {
-    ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCells"));
-    return null;
-  }
+  const failWith = message => {
+    ui.notifications.warn(message);
+    return { ok: false, message };
+  };
+  if (!cells.length) return failWith(game.i18n.localize("WFC.Generate.NoCells"));
 
   const collections = await loadCollections(collectionDirs);
   const tiles = collections.flatMap(collectionTiles);
-  if (!tiles.length) {
-    ui.notifications.warn(game.i18n.localize("WFC.Generate.NoTiles"));
-    return null;
-  }
+  if (!tiles.length) return failWith(game.i18n.localize("WFC.Generate.NoTiles"));
   const variants = expandVariants(tiles);
   const compatible = mergeCompatibility(collections.map(c => c.mapping.compatible));
   log.debug(`${tiles.length} tiles expanded to ${variants.length} variants; compatibility`, compatible);
@@ -218,12 +216,10 @@ export async function generateDungeon({
   const result = solve({ cells, variants, boundaryTags, compatible, constraints, shared, seed: String(seed) });
   log.debug(`solve finished in ${Math.round(performance.now() - started)} ms`, { success: result.success, attempts: result.attempts, failedCell: result.failedCell });
   if (!result.success) {
-    const cell = result.failedCell;
-    ui.notifications.error(game.i18n.format("WFC.Generate.Failed", {
-      attempts: result.attempts,
-      cell: cell ? `${cell.j + 1}, ${cell.i + 1}` : "?"
-    }));
-    return null;
+    const message = explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, boundaryTags, shared });
+    log.warn("generation failed:", message, { failure: result.failure, constraints: result.failure ? constraints[cellIndex.get(cellKey(result.failure.cell.i, result.failure.cell.j))] : null });
+    ui.notifications.error(message.split("\n")[0]);
+    return { ok: false, message };
   }
 
   // Remove what was generated here before. Wall pieces on the border of the region are kept in
@@ -275,8 +271,42 @@ export async function generateDungeon({
   if (tileDocs.length) await scene.createEmbeddedDocuments("Tile", tileDocs);
   if (wallDocs.length) await scene.createEmbeddedDocuments("Wall", wallDocs);
   await game.settings.set(MODULE_ID, "lastGeneration", generationId);
-  ui.notifications.info(game.i18n.format("WFC.Generate.Done", { tiles: tileDocs.length, walls: wallDocs.length }));
-  return { generationId, tiles: tileDocs.length, walls: wallDocs.length };
+  const message = game.i18n.format("WFC.Generate.Placed", { tiles: tileDocs.length, walls: wallDocs.length, seed });
+  ui.notifications.info(message);
+  return { ok: true, message, generationId, tiles: tileDocs.length, walls: wallDocs.length };
+}
+
+/** Build a readable explanation of a failed solve. */
+function explainFailure(result, { cells, cellIndex, cellSet, constraints, variants, compatible, boundaryTags, shared }) {
+  const f = result.failure;
+  const label = cell => `(${cell.j + 1}, ${cell.i + 1})`;
+  if (!f) return game.i18n.format("WFC.Generate.Failed", { attempts: result.attempts, cell: "?" });
+  const k = cellIndex.get(cellKey(f.cell.i, f.cell.j));
+  const outside = SIDES.filter(side => {
+    const [di, dj] = DELTAS[side];
+    return !cellSet.has(cellKey(f.cell.i + di, f.cell.j + dj));
+  });
+  const lines = describeCellConstraints(constraints[k], variants, compatible, { outside, boundaryTags });
+  const sharedHere = shared.filter(r => r.a === k || r.b === k).map(r => {
+    const other = cells[r.a === k ? r.b : r.a];
+    const side = r.a === k ? r.sideA : r.sideB;
+    const what = r.feature ? `a ${r.feature}` : `tags [${r.tags}]`;
+    return `edge ${side} towards ${label(other)} needs ${what} on one of the two tiles`;
+  });
+  let head;
+  switch (f.stage) {
+    case "constraints":
+      head = game.i18n.format("WFC.Generate.FailedConstraints", { cell: label(f.cell) });
+      break;
+    case "propagation":
+    case "shared":
+      head = game.i18n.format("WFC.Generate.FailedPropagation", { cell: label(f.cell), from: f.from ? label(f.from) : "?" });
+      break;
+    default:
+      head = game.i18n.format("WFC.Generate.Failed", { attempts: result.attempts, cell: label(f.cell) });
+  }
+  const detail = [...lines, ...sharedHere];
+  return detail.length ? `${head}\n${detail.map(l => `• ${l}`).join("\n")}` : head;
 }
 
 /**

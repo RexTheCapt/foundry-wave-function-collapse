@@ -121,18 +121,22 @@ async function generateForPolygons(polygons) {
     CollectionsApp.open();
     return;
   }
-  log.debug("opening generate dialog");
-  const options = await GenerateDialog.show({ collections, cellCount });
-  log.debug("generate dialog result", options);
-  if (!options) return;
-  for (const polygon of polygons) {
-    try {
-      await generateDungeon({ polygon, ...options });
-    } catch (err) {
-      log.error("generation failed", err);
-      ui.notifications.error(err.message);
+  log.debug("opening generate panel");
+  await GenerateDialog.open({
+    collections,
+    cellCount,
+    onGenerate: async options => {
+      log.debug("generate requested", options);
+      const results = [];
+      for (const polygon of polygons) results.push(await generateDungeon({ polygon, ...options }));
+      const failed = results.find(r => !r.ok);
+      if (failed) return failed;
+      const tiles = results.reduce((n, r) => n + (r.tiles ?? 0), 0);
+      const walls = results.reduce((n, r) => n + (r.walls ?? 0), 0);
+      return { ok: true, message: game.i18n.format("WFC.Generate.Placed", { tiles, walls, seed: options.seed }) };
     }
-  }
+  });
+  log.debug("generate panel closed");
 }
 
 async function generateFromDrawings() {

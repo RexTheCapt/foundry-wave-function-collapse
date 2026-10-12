@@ -69,3 +69,26 @@ export function markerTargetAtPoint(x, y, size, edgeZone = 0.3) {
   if (nearest <= edgeZone) return { kind: "edge", ...edgeAtPoint(x, y, size) };
   return { kind: "cell", i, j };
 }
+
+/**
+ * All edges on the same grid line between two edges (inclusive). Returns an empty list when the
+ * end is not an edge on the same line as the start.
+ * @param {{x: number, y: number, dir: string}} start
+ * @param {{kind?: string, x?: number, y?: number, dir?: string}} end
+ * @param {number} size
+ */
+export function edgesAlongLine(start, end, size) {
+  if (!end || (end.kind && end.kind !== "edge") || end.dir !== start.dir) return [];
+  if (start.dir === "h") {
+    if (end.y !== start.y) return [];
+    const [a, b] = [Math.min(start.x, end.x), Math.max(start.x, end.x)];
+    const out = [];
+    for (let x = a; x <= b; x += size) out.push({ x, y: start.y, dir: "h" });
+    return out;
+  }
+  if (end.x !== start.x) return [];
+  const [a, b] = [Math.min(start.y, end.y), Math.max(start.y, end.y)];
+  const out = [];
+  for (let y = a; y <= b; y += size) out.push({ x: start.x, y, dir: "v" });
+  return out;
+}

@@ -21,6 +21,10 @@
   </div>
 </div>
 <div class="form-group">
+  <label>{{localize "WFC.Generate.NewSeed"}}</label>
+  <div class="form-fields"><input type="checkbox" name="newSeed" {{#if newSeed}}checked{{/if}}></div>
+</div>
+<div class="form-group">
   <label>{{localize "WFC.Generate.Boundary"}}</label>
   <div class="form-fields"><input type="text" name="boundaryTags" value="{{boundaryTags}}"></div>
   <p class="hint">{{localize "WFC.Generate.BoundaryHint"}}</p>
@@ -52,8 +56,10 @@
   <div class="form-fields"><input type="checkbox" name="clearExisting" {{#if clearExisting}}checked{{/if}}></div>
   <p class="hint">{{localize "WFC.Generate.ClearExistingHint"}}</p>
 </div>
+<p class="wfc-status{{#unless statusOk}} wfc-status-error{{/unless}}" data-status>{{status}}</p>
+<p class="hint">{{localize "WFC.Generate.PanelHint"}}</p>
 <footer class="form-footer">
-  <button type="button" data-action="cancel"><i class="fa-solid fa-xmark"></i> {{localize "WFC.Generate.Cancel"}}</button>
+  <button type="button" data-action="done"><i class="fa-solid fa-check"></i> {{localize "WFC.Generate.Close"}}</button>
   <button type="submit"><i class="fa-solid fa-dungeon"></i> {{localize "WFC.Generate.Generate"}}</button>
 </footer>
 </div>

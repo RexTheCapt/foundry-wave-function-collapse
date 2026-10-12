@@ -7,7 +7,7 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { edgeKey, edgeEndpoints, cellMarkerKey, markerTargetAtPoint } from "./lib/edges.js";
+import { edgeKey, edgeEndpoints, cellMarkerKey, markerTargetAtPoint, edgesAlongLine } from "./lib/edges.js";
 import { normalizeTags } from "./lib/wfc.js";
 import { log } from "./log.js";
 
@@ -138,12 +138,19 @@ export class MarkerLayer {
   }
 }
 
-/** Canvas tool that adds, edits and removes markers by clicking on cell edges or cell centers. */
+/**
+ * Canvas tool that adds, edits and removes markers. Click a cell edge or a cell center for a
+ * single marker; press on an edge and drag along its grid line to mark every edge on the line.
+ */
 export class MarkerTool {
   constructor({ layer }) {
     this.layer = layer;
     this.active = false;
+    this.drag = null;
+    this.preview = null;
     this._onPointerDown = this.#onPointerDown.bind(this);
+    this._onPointerMove = this.#onPointerMove.bind(this);
+    this._onPointerUp = this.#onPointerUp.bind(this);
   }
 
   get view() {
@@ -159,7 +166,10 @@ export class MarkerTool {
     if (this.active) return;
     if (!canvas.ready) { log.warn("marker tool: canvas not ready"); return; }
     this.active = true;
-    this.view.addEventListener("pointerdown", this._onPointerDown);
+    const view = this.view;
+    view.addEventListener("pointerdown", this._onPointerDown);
+    view.addEventListener("pointermove", this._onPointerMove);
+    window.addEventListener("pointerup", this._onPointerUp);
     this.layer.show();
     log.debug("marker tool activated");
     ui.notifications.info(game.i18n.localize("WFC.Tools.MarkersHint"));
@@ -168,7 +178,12 @@ export class MarkerTool {
   deactivate() {
     if (!this.active) return;
     this.active = false;
-    this.view?.removeEventListener("pointerdown", this._onPointerDown);
+    const view = this.view;
+    view?.removeEventListener("pointerdown", this._onPointerDown);
+    view?.removeEventListener("pointermove", this._onPointerMove);
+    window.removeEventListener("pointerup", this._onPointerUp);
+    this.drag = null;
+    this.#clearPreview();
     log.debug("marker tool deactivated");
   }
 
@@ -180,34 +195,97 @@ export class MarkerTool {
     return canvas.stage.toLocal(new PIXI.Point(event.clientX - rect.left, event.clientY - rect.top));
   }
 
-  async #onPointerDown(event) {
-    if (event.button !== 0 && event.button !== 2) return;
+  #targetAt(event) {
     const point = this.#toCanvas(event);
-    const target = markerTargetAtPoint(point.x, point.y, canvas.grid.size);
-    const existing = getMarkers().find(m => markerKey(m) === markerKey(target));
-    log.debug("marker tool click", { button: event.button, target, existing });
+    return markerTargetAtPoint(point.x, point.y, canvas.grid.size);
+  }
+
+  #onPointerDown(event) {
+    if (event.button !== 0 && event.button !== 2) return;
+    const target = this.#targetAt(event);
+    this.drag = { button: event.button, shift: event.shiftKey, start: target, current: target, clientX: event.clientX, clientY: event.clientY };
+    log.debug("marker tool press", target);
+  }
+
+  #onPointerMove(event) {
+    if (!this.drag || this.drag.start.kind !== "edge") return;
+    const target = this.#targetAt(event);
+    this.drag.current = target;
+    const edges = edgesAlongLine(this.drag.start, target, canvas.grid.size);
+    this.#drawPreview(edges, this.drag.button === 2);
+  }
+
+  async #onPointerUp(event) {
+    const drag = this.drag;
+    if (!drag || event.button !== drag.button) return;
+    this.drag = null;
+    this.#clearPreview();
+    const moved = Math.hypot(event.clientX - drag.clientX, event.clientY - drag.clientY) > 6;
+    let targets;
+    if (moved && drag.start.kind === "edge") {
+      const end = this.#targetAt(event);
+      targets = edgesAlongLine(drag.start, end, canvas.grid.size).map(e => ({ kind: "edge", ...e }));
+      if (!targets.length) return;
+    } else {
+      targets = [drag.start];
+    }
+    log.debug(`marker tool release: ${targets.length} target(s), button ${drag.button}`, targets);
     try {
-      if (event.button === 2) {
-        if (existing) await setMarker(target, {});
+      const markers = getMarkers();
+      const existingFor = t => markers.find(m => markerKey(m) === markerKey(t));
+      if (drag.button === 2) {
+        const keys = new Set(targets.map(markerKey));
+        if (markers.some(m => keys.has(markerKey(m)))) await setMarkers(markers.filter(m => !keys.has(markerKey(m))));
         return;
       }
+      const single = targets.length === 1 ? targets[0] : null;
+      const existing = single ? existingFor(single) : null;
       const last = this.last;
-      if (event.shiftKey && !existing) {
-        const quick = target.kind === "cell" ? { features: last.features } : last;
-        if (quick.features.length || quick.tags?.length) await setMarker(target, quick);
-        return;
+      const kind = targets[0].kind;
+      let data;
+      if (drag.shift && !existing) {
+        data = kind === "cell" ? { tags: [], features: last.features } : last;
+        if (!data.tags?.length && !data.features.length) return;
+      } else {
+        const initial = existing ?? (kind === "cell" ? { features: last.features } : last);
+        data = await MarkerTool.prompt(kind, initial);
+        if (!data) return;
+        if (data.tags.length || data.features.length) {
+          await game.settings.set(MODULE_ID, "lastMarker", { tags: data.tags.join(", "), features: data.features.join(", ") });
+        }
       }
-      const initial = existing ?? (target.kind === "cell" ? { features: last.features } : last);
-      const data = await MarkerTool.prompt(target.kind, initial);
-      if (!data) return;
-      if (data.tags.length || data.features.length) {
-        await game.settings.set(MODULE_ID, "lastMarker", { tags: data.tags.join(", "), features: data.features.join(", ") });
-      }
-      await setMarker(target, data);
+      const keys = new Set(targets.map(markerKey));
+      const kept = markers.filter(m => !keys.has(markerKey(m)));
+      const added = (data.tags?.length || data.features.length)
+        ? targets.map(t => ({ ...t, tags: data.tags ?? [], features: data.features })).map(m => ({ ...m }))
+        : [];
+      await setMarkers([...kept, ...added]);
     } catch (err) {
       log.error("marker tool failed", err);
       ui.notifications.error(err.message);
     }
+  }
+
+  #drawPreview(edges, removing) {
+    this.#clearPreview();
+    if (!edges.length) return;
+    const g = new PIXI.Graphics();
+    g.zIndex = 9500;
+    g.eventMode = "none";
+    const size = canvas.grid.size;
+    g.lineStyle(Math.max(4, size * 0.08), removing ? 0xff5555 : 0xffd166, 0.8);
+    for (const e of edges) {
+      const [x1, y1, x2, y2] = edgeEndpoints(e, size);
+      g.moveTo(x1, y1);
+      g.lineTo(x2, y2);
+    }
+    (canvas.controls ?? canvas.interface ?? canvas.stage).addChild(g);
+    this.preview = g;
+  }
+
+  #clearPreview() {
+    this.preview?.destroy();
+    this.preview = null;
   }
 
   /** Ask for marker contents. Resolves with { tags, features }, or null when cancelled. */
@@ -223,7 +301,7 @@ export class MarkerTool {
         <p class="hint">${game.i18n.localize(kind === "cell" ? "WFC.Markers.CellFeaturesHint" : "WFC.Markers.FeaturesHint")}</p></div>
       <p class="hint">${game.i18n.localize("WFC.Markers.EmptyHint")}</p>`;
     const result = await foundry.applications.api.DialogV2.prompt({
-      window: { title: game.i18n.localize(kind === "cell" ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-door-open" },
+      window: { title: game.i18n.localize(kind === "cell" ? "WFC.Markers.CellTitle" : "WFC.Markers.EdgeTitle"), icon: "fa-solid fa-draw-polygon" },
       content,
       ok: {
         label: game.i18n.localize("WFC.Markers.Set"),

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pointInPolygon, cellsInPolygon, outlineWalls, mergeWalls, tileWallsForCell, drawingToPolygon, pointInOrOnPolygon, wallPartsOutside, splitWallByCells, cellKey, cutDoorsFromWalls } from "../scripts/lib/geometry.js";
-import { edgeAtPoint, edgeCellSides, cellSideEdge, edgeKey, edgeEndpoints, markerTargetAtPoint } from "../scripts/lib/edges.js";
+import { edgeAtPoint, edgeCellSides, cellSideEdge, edgeKey, edgeEndpoints, markerTargetAtPoint, edgesAlongLine } from "../scripts/lib/edges.js";
 
 test("pointInPolygon", () => {
   const square = [[0, 0], [10, 0], [10, 10], [0, 10]];
@@ -137,4 +137,14 @@ test("splitWallByCells separates border pieces", () => {
   assert.equal(split.border[0].door, 1);
   const interior = splitWallByCells({ c: [100, 100, 300, 100] }, new Set([cellKey(0, 1), cellKey(1, 1), cellKey(0, 2), cellKey(1, 2)]), 100);
   assert.deepEqual(interior.inside.map(w => w.c), [[100, 100, 300, 100]]);
+});
+
+test("edgesAlongLine enumerates edges between two edges on one grid line", () => {
+  const start = { x: 100, y: 200, dir: "h" };
+  assert.deepEqual(edgesAlongLine(start, { kind: "edge", x: 300, y: 200, dir: "h" }, 100).map(e => e.x), [100, 200, 300]);
+  assert.deepEqual(edgesAlongLine(start, { kind: "edge", x: 0, y: 200, dir: "h" }, 100).map(e => e.x), [0, 100]);
+  assert.deepEqual(edgesAlongLine(start, { kind: "edge", x: 100, y: 300, dir: "h" }, 100), []);
+  assert.deepEqual(edgesAlongLine(start, { kind: "edge", x: 100, y: 200, dir: "v" }, 100), []);
+  assert.deepEqual(edgesAlongLine(start, { kind: "cell", i: 1, j: 1 }, 100), []);
+  assert.deepEqual(edgesAlongLine({ x: 100, y: 0, dir: "v" }, { kind: "edge", x: 100, y: 200, dir: "v" }, 100).map(e => e.y), [0, 100, 200]);
 });

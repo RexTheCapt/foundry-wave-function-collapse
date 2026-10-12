@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
+import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, describeCellConstraints, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
 import { normalizeMapping } from "../scripts/lib/mapping.js";
 import { cellsInPolygon } from "../scripts/lib/geometry.js";
 
@@ -100,8 +100,29 @@ test("solve reports failure when no tile fits", () => {
   const result = solve({ cells, variants: expandVariants([a]), boundaryTags: ["y"], seed: 1, maxAttempts: 3 });
   assert.equal(result.success, false);
   assert.deepEqual(result.failedCell, cells[0]);
-  assert.equal(result.attempts, 3);
+  assert.equal(result.failure.stage, "constraints");
+  assert.equal(result.attempts, 1, "deterministic failures do not retry");
 });
+
+test("failure diagnostics name the stage and the neighbour", () => {
+  const variants = expandVariants(sampleTiles);
+  // Contradictory unary constraints: must be exactly wall and compatible with wall (i.e. floor).
+  const unary = sampleSolve({ cells: [{ i: 0, j: 0 }], variants, constraints: [{ n: { require: ["wall"], compatibleWith: ["wall"] } }], seed: 1 });
+  assert.equal(unary.success, false);
+  assert.equal(unary.failure.stage, "constraints");
+  const lines = describeCellConstraints({ n: { require: ["wall"], compatibleWith: ["wall"] } }, variants, sampleMapping.compatible);
+  assert.ok(lines.some(l => l.startsWith("north must be exactly [wall]")));
+  assert.ok(lines.some(l => l.startsWith("north must be compatible with [wall]")));
+  // Propagation: cell 0 must draw a wall on its east, cell 1 must draw a wall on its west; one-sided walls forbid that.
+  const prop = sampleSolve({ cells: [{ i: 0, j: 0 }, { i: 0, j: 1 }], variants, constraints: [{ e: { require: ["wall"] } }, { w: { require: ["wall"] } }], seed: 1 });
+  assert.equal(prop.success, false);
+  assert.equal(prop.failure.stage, "propagation");
+  assert.ok(prop.failure.from);
+  // Boundary description for outside sides.
+  const b = describeCellConstraints(undefined, variants, null, { outside: ["n"], boundaryTags: ["wall"] });
+  assert.equal(b.length, 1);
+});
+
 
 test("solve with no cells succeeds trivially", () => {
   const result = sampleSolve({ cells: [], variants: expandVariants(sampleTiles) });

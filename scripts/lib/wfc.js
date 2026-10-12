@@ -268,13 +268,17 @@ const cellKey = (i, j) => `${i},${j}`;
  *   must offer the feature, or carry exactly the tags.
  * @param {string} [options.seed]
  * @param {number} [options.maxAttempts]  Restarts allowed on contradiction.
- * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null}}
+ * @returns {{success: boolean, attempts: number, assignments: {cell: object, variant: object, variantIndex: number}[], failedCell: object|null, failure: {stage: string, cell: object, from?: object}|null}}
+ *   `failure.stage` is "constraints" when a cell has no variant satisfying its own constraints,
+ *   "propagation" when the initial propagation emptied a cell (`from` is the neighbouring cell
+ *   that forced it), "shared" when a shared edge requirement could not be met, or "collapse"
+ *   when a random choice led to a dead end (which triggers a restart).
  */
 export function solve({ cells, variants, boundaryTags = null, compatible = null, constraints = null, shared = [], seed = "", maxAttempts = 20 }) {
   const V = variants.length;
   const N = cells.length;
   if (!V) throw new Error("No tile variants to solve with");
-  if (!N) return { success: true, attempts: 0, assignments: [], failedCell: null };
+  if (!N) return { success: true, attempts: 0, assignments: [], failedCell: null, failure: null };
 
   const index = new Map(cells.map((c, k) => [cellKey(c.i, c.j), k]));
   const neighbors = cells.map(c => SIDES.map(side => {
@@ -345,9 +349,44 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const rng = mulberry32(hashSeed(`${seed}#${attempt}`));
     last = attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared: sharedMasks, weights, weightLog, rng });
-    if (last.success) return { ...last, attempts: attempt + 1 };
+    if (last.success) return { ...last, attempts: attempt + 1, failure: null };
+    // A failure before any random choice is deterministic: retrying cannot help.
+    if (last.failure.stage !== "collapse") return { ...last, attempts: attempt + 1 };
   }
-  return { success: false, attempts: maxAttempts, assignments: [], failedCell: last?.failedCell ?? null };
+  return { success: false, attempts: maxAttempts, assignments: [], failedCell: last?.failedCell ?? null, failure: last?.failure ?? null };
+}
+
+/**
+ * Human readable description of a cell's constraints and how many variants satisfy each one.
+ * Useful to explain a "constraints" failure.
+ * @param {Record<string, object>|undefined} cellConstraints
+ * @param {object[]} variants
+ * @param {Record<string, string[]>|null} compatible
+ * @param {{outside?: string[], boundaryTags?: string[]}} [context]  Sides facing outside the region.
+ * @returns {string[]}
+ */
+export function describeCellConstraints(cellConstraints, variants, compatible = null, { outside = [], boundaryTags = [] } = {}) {
+  const compat = buildCompatibility(compatible);
+  const boundary = normalizeTags(boundaryTags);
+  const lines = [];
+  const count = test => variants.filter(test).length;
+  for (const place of [...SIDES, CENTER]) {
+    const c = cellConstraints?.[place] ?? {};
+    const name = { n: "north", e: "east", s: "south", w: "west", c: "center" }[place];
+    const require = c.require ? normalizeTags(c.require) : (outside.includes(place) && boundary.length ? boundary : null);
+    if (require) lines.push(`${name} must be exactly [${require}] (${count(v => tagsMatch(v.tags[place], require))} variants)`);
+    if (c.compatibleWith) {
+      const cw = normalizeTags(c.compatibleWith);
+      lines.push(`${name} must be compatible with [${cw}] (${count(v => tagsMatch(v.tags[place], cw, compat))} variants)`);
+    }
+    if (c.forbid?.length) lines.push(`${name} must not have tags [${normalizeTags(c.forbid)}]`);
+    if (c.requireFeatures?.length) {
+      const rf = normalizeTags(c.requireFeatures);
+      lines.push(`${name} must offer [${rf}] (${count(v => rf.every(f => (v.features?.[place] ?? []).includes(f)))} variants)`);
+    }
+    if (c.forbidFeatures?.length) lines.push(`${name} must not offer [${normalizeTags(c.forbidFeatures)}]`);
+  }
+  return lines;
 }
 
 function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, shared, weights, weightLog, rng }) {
@@ -366,7 +405,7 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
         if (d[a] && !ok[a]) { d[a] = 0; counts[k]--; }
       }
     }
-    if (counts[k] === 0) return { success: false, assignments: [], failedCell: cells[k] };
+    if (counts[k] === 0) return { success: false, assignments: [], failedCell: cells[k], failure: { stage: "constraints", cell: cells[k] } };
     inQueue[k] = 1;
     stack.push(k);
   }
@@ -408,24 +447,31 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
           for (let b = 0; b < V; b++) {
             if (dn[b] && !allowed[b]) { dn[b] = 0; counts[n]--; changed = true; }
           }
-          if (counts[n] === 0) return n;
+          if (counts[n] === 0) return { cell: n, from: k, stage: "propagation" };
           if (changed && !inQueue[n]) { inQueue[n] = 1; stack.push(n); }
         }
       }
-      // Shared feature requirements: when one side can no longer offer the feature, the other must.
+      // Shared edge requirements: when one side can no longer satisfy it, the other must.
       for (const r of shared) {
         const aCan = canOffer(r.a, r.maskA);
         const bCan = canOffer(r.b, r.maskB);
-        if (!aCan && !bCan) return r.a;
-        if (!aCan && !restrictTo(r.b, r.maskB)) return r.b;
-        if (!bCan && !restrictTo(r.a, r.maskA)) return r.a;
+        if (!aCan && !bCan) return { cell: r.a, from: r.b, stage: "shared" };
+        if (!aCan && !restrictTo(r.b, r.maskB)) return { cell: r.b, from: r.a, stage: "shared" };
+        if (!bCan && !restrictTo(r.a, r.maskA)) return { cell: r.a, from: r.b, stage: "shared" };
       }
-      if (!stack.length) return -1;
+      if (!stack.length) return null;
     }
   };
 
+  const fail = (info, stage = info.stage) => ({
+    success: false,
+    assignments: [],
+    failedCell: cells[info.cell],
+    failure: { stage, cell: cells[info.cell], from: info.from === undefined ? undefined : cells[info.from] }
+  });
+
   let failed = propagate();
-  if (failed >= 0) return { success: false, assignments: [], failedCell: cells[failed] };
+  if (failed) return fail(failed);
 
   for (;;) {
     // Pick the cell with the lowest weighted entropy among unresolved cells.
@@ -464,7 +510,7 @@ function attemptSolve({ N, V, cells, variants, neighbors, compat, allowedMasks, 
     inQueue[best] = 1;
     stack.push(best);
     failed = propagate();
-    if (failed >= 0) return { success: false, assignments: [], failedCell: cells[failed] };
+    if (failed) return fail(failed, "collapse");
   }
 
   const assignments = [];

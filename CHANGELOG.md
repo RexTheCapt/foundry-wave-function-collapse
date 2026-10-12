@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0
+
+- The generate dialog is now a panel that keeps the outline active: generate repeatedly with
+  different settings or seeds and press Done to finish. A "new seed for every generation" option
+  rolls the seed after each run.
+- Failed generations explain themselves: the panel and the console name the failing cell, which
+  neighbour forced it, and every constraint on that cell with the number of tiles satisfying it.
+  Deterministic failures no longer waste 20 restarts.
+- Markers tool renamed to "Edge markers". Press on an edge and drag along its grid line to mark or
+  (with the right button) unmark the whole line.
+
 ## 0.3.0
 
 - Collections can declare compatible tags (`"compatible": { "wall": ["floor"] }`), so differing

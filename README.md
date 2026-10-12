@@ -50,9 +50,14 @@ walls along the cell edges that face outside.
 
 ### 2. Choose collections and generate
 
-A dialog asks which tile collections to use (multiple choice), a seed, and optional
+A panel asks which tile collections to use (multiple choice), a seed, and optional
 **boundary tags**. When boundary tags are set, tile sides that face outside the outline must match
 them. The bundled sample collection uses the boundary tag `wall` so the dungeon is closed off.
+
+The outline stays active while the panel is open. Press **Generate** as often as you like with
+different settings or seeds (each run replaces the previous one inside the outline when
+"Replace previous generation" is on), and press **Done** when you are happy. If no arrangement
+exists, the panel explains which cell failed and which of its constraints collide.
 
 Options:
 
