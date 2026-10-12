@@ -5,6 +5,10 @@
       "OutlineHint": "Click grid points to outline the dungeon. Click the first point or press Enter to finish, right-click to undo, Escape to clear.",
       "Markers": "Edge markers (WFC)",
       "MarkersHint": "Click a cell edge to require side tags (e.g. wall) or a door there, or press and drag along a grid line to mark the whole line. Click a cell center to require a door inside the tile. Shift-click reuses the last marker, right-click (or right-drag) removes.",
+      "Areas": "Empty areas (WFC)",
+      "AreasHint": "Click grid points to outline an area that must stay empty. Click the first point or press Enter to finish, right-click to undo a point, right-click inside an area to remove it, Escape to clear.",
+      "Picker": "Tile picker (WFC)",
+      "PickerHint": "Click a grid cell to choose which tile goes there. Only tiles that fit the neighbouring tiles, markers and empty areas are offered.",
       "FromDrawing": "Generate dungeon from selected drawings (WFC)",
       "Collections": "Tile collections (WFC)",
       "Clear": "Remove generated dungeon (WFC)"
@@ -108,6 +112,20 @@
       "EmptyHint": "Leave both empty to remove the marker.",
       "Set": "Set marker"
     },
+    "Areas": {
+      "Added": "Empty area added. The generator leaves it blank and walls it off unless an edge marker says otherwise.",
+      "Removed": "Empty area removed."
+    },
+    "Picker": {
+      "Title": "Pick a tile",
+      "Hint": "Cell {cell}: {allowed} of {total} tile variants fit here.",
+      "Current": "Currently placed: {name}.",
+      "Rules": "Rules applied to this cell",
+      "ShowAll": "Show all tiles",
+      "OnlyAllowed": "Only fitting tiles",
+      "None": "No tile fits this cell. Change the neighbours, markers or restrictions, or show all tiles.",
+      "Placed": "Placed {name} ({rotation}°)."
+    },
     "Generate": {
       "Title": "Generate dungeon",
       "Cells": "{count} grid cells inside the outline.",
@@ -153,6 +171,8 @@
       "All": "Everything generated",
       "Markers": "Markers ({count})",
       "MarkersDone": "Removed all markers from the scene.",
+      "Areas": "Empty areas ({count})",
+      "AreasDone": "Removed all empty areas from the scene.",
       "Cancel": "Cancel",
       "Done": "Removed {tiles} tiles and {walls} walls.",
       "Nothing": "Nothing to remove."

@@ -10,6 +10,7 @@ import { MODULE_ID } from "./constants.js";
 import { edgeKey, edgeEndpoints, cellMarkerKey, markerTargetAtPoint, edgesAlongLine } from "./lib/edges.js";
 import { normalizeTags, DOOR_FEATURES } from "./lib/wfc.js";
 import { log } from "./log.js";
+import { getEmptyAreas } from "./areas.js";
 
 const FLAG_PATH = `flags.${MODULE_ID}.edgeMarkers`;
 
@@ -118,6 +119,27 @@ export class MarkerLayer {
     container.eventMode = "none";
     const g = new PIXI.Graphics();
     container.addChild(g);
+    // Empty areas: hatched red polygons.
+    const areas = getEmptyAreas();
+    for (const poly of areas) {
+      g.lineStyle(3, 0xe63946, 0.9);
+      g.beginFill(0xe63946, 0.12);
+      g.drawPolygon(poly.flat());
+      g.endFill();
+      g.lineStyle(1, 0xe63946, 0.35);
+      const xs = poly.map(pt => pt[0]);
+      const ys = poly.map(pt => pt[1]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+      const step = Math.max(16, size / 4);
+      for (let d = minX - (maxY - minY); d < maxX; d += step) {
+        // Diagonal hatch lines clipped roughly to the bounding box; the fill shows the exact shape.
+        const x1 = Math.max(minX, d), y1 = minY + (x1 - d);
+        const x2 = Math.min(maxX, d + (maxY - minY)), y2 = minY + (x2 - d);
+        if (x2 <= x1) continue;
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+      }
+    }
     const style = {
       fontFamily: "Signika, sans-serif",
       fontSize: Math.max(12, size * 0.16),
@@ -152,7 +174,7 @@ export class MarkerLayer {
     const parent = canvas.controls ?? canvas.interface ?? canvas.stage;
     parent.addChild(container);
     this.container = container;
-    log.debug(`marker layer drew ${markers.length} markers`);
+    log.debug(`marker layer drew ${markers.length} markers and ${areas.length} empty areas`);
   }
 }
 

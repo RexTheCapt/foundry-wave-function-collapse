@@ -52,3 +52,14 @@
 .wfc-generate .wfc-status { flex: 1; cursor: text; min-height: 1.4em; white-space: pre-line; font-size: 0.9em; margin: 0; padding: 0.3rem 0.5rem; border-left: 3px solid #3ddc84; background: rgba(61, 220, 132, 0.08); }
 .wfc-generate .wfc-status:empty { display: none; }
 .wfc-generate .wfc-status.wfc-status-error { border-left-color: #e63946; background: rgba(230, 57, 70, 0.08); }
+
+/* Tile picker */
+.wfc-tile-picker .wfc-part-picker { height: 100%; }
+.wfc-picker-rules { font-size: 0.85em; }
+.wfc-picker-rules ul { margin: 0.25rem 0 0 1rem; padding: 0; }
+.wfc-picker-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.4rem; align-content: start; }
+.wfc-picker-card { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.35rem; height: auto; line-height: 1.2; border: 1px solid var(--color-border-light-2, rgba(0,0,0,0.25)); border-radius: 4px; background: rgba(0,0,0,0.05); cursor: pointer; }
+.wfc-picker-card:hover { border-color: #4fa3ff; box-shadow: 0 0 6px #4fa3ff; }
+.wfc-picker-card img { width: 80px; height: 80px; object-fit: cover; border: 1px solid rgba(0,0,0,0.4); }
+.wfc-picker-card .wfc-picker-name { font-size: 0.75em; word-break: break-all; text-align: center; user-select: none; }
+.wfc-picker-card.wfc-picker-blocked { opacity: 0.45; }

@@ -3,11 +3,12 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { cellsInPolygon, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
-import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, describeCellConstraints, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
-import { edgeCellSides } from "./lib/edges.js";
+import { cellsInPolygonExcluding, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
+import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, tagsMatch, mergeCompatibility, describeCellConstraints, allowedVariants, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
+import { edgeCellSides, cellSideEdge, edgeKey, cellMarkerKey } from "./lib/edges.js";
 import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
 import { getMarkers } from "./markers.js";
+import { getEmptyAreas } from "./areas.js";
 import { log } from "./log.js";
 
 export function assertSquareGrid() {
@@ -118,10 +119,12 @@ export async function generateDungeon({
   assertSquareGrid();
   const scene = canvas.scene;
   const size = canvas.grid.size;
-  const cells = cellsInPolygon(polygon, size);
+  const emptyAreas = getEmptyAreas(scene);
+  const { cells, voids } = cellsInPolygonExcluding(polygon, emptyAreas, size);
   const cellSet = new Set(cells.map(c => cellKey(c.i, c.j)));
+  const voidSet = new Set(voids.map(c => cellKey(c.i, c.j)));
   const cellIndex = new Map(cells.map((c, k) => [cellKey(c.i, c.j), k]));
-  log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, gridSize: size });
+  log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, voids: voids.length, emptyAreas: emptyAreas.length, gridSize: size });
   const failWith = message => {
     ui.notifications.warn(message);
     return { ok: false, message };
@@ -147,6 +150,8 @@ export async function generateDungeon({
     }
   }
   const existing = await existingTiles(scene, size);
+  // Cells inside an empty area count as open outside, whatever was generated there before.
+  for (const key of voidSet) existing.delete(key);
   let surroundingSides = 0;
   if (matchSurroundings) {
     cells.forEach((cell, k) => {
@@ -223,7 +228,7 @@ export async function generateDungeon({
   // the pool so a neighbour's door or wall on a shared edge survives the regeneration.
   let borderWalls = [];
   if (clearExisting) {
-    const removed = await clearGeneratedInCells(scene, cellSet, size);
+    const removed = await clearGeneratedInCells(scene, new Set([...cellSet, ...voidSet]), size);
     borderWalls = removed.border;
     log.debug("cleared previous generation inside the outline", { tiles: removed.tiles, walls: removed.walls, clipped: removed.clipped, border: borderWalls.length });
   }
@@ -362,4 +367,105 @@ export async function clearGenerated(mode = "last") {
   if (result.tiles + result.walls === 0) ui.notifications.info(game.i18n.localize("WFC.Clear.Nothing"));
   else ui.notifications.info(game.i18n.format("WFC.Clear.Done", result));
   return result;
+}
+
+/**
+ * Tile variants the solver would accept in one cell, given the generated tiles around it, the
+ * markers on its edges and the empty areas. Sides with nothing next to them are unconstrained.
+ * @param {{i: number, j: number}} cell
+ * @param {string[]} collectionDirs
+ * @param {{restrictedTags?: string[]|string}} [options]
+ * @returns {Promise<{variants: object[], allowed: object[], constraints: object, compatible: object, existingTile: object|null}>}
+ */
+export async function candidatesForCell(cell, collectionDirs, { restrictedTags = "" } = {}) {
+  assertSquareGrid();
+  const scene = canvas.scene;
+  const size = canvas.grid.size;
+  const collections = await loadCollections(collectionDirs);
+  const variants = expandVariants(collections.flatMap(collectionTiles));
+  const compatible = mergeCompatibility(collections.map(c => c.mapping.compatible));
+  const existing = await existingTiles(scene, size);
+  const voids = new Set();
+  const areas = getEmptyAreas(scene);
+  const constraints = {};
+  const ensure = place => (constraints[place] ??= {});
+  const without = (list, remove) => (list ?? []).filter(x => !remove.includes(x));
+  const restricted = normalizeTags(restrictedTags);
+  if (restricted.length) {
+    for (const side of SIDES) Object.assign(ensure(side), { forbid: restricted, forbidFeatures: restricted });
+    ensure(CENTER).forbidFeatures = restricted;
+  }
+  const markers = getMarkers(scene);
+  const edgeMarkers = new Map(markers.filter(m => m.kind === "edge").map(m => [edgeKey(m), m]));
+  const cellMarker = markers.find(m => m.kind === "cell" && cellMarkerKey(m) === cellMarkerKey(cell));
+  if (cellMarker) {
+    ensure(CENTER).requireFeatures = cellMarker.features;
+    ensure(CENTER).forbidFeatures = without(constraints[CENTER].forbidFeatures, cellMarker.features);
+  }
+  for (const side of SIDES) {
+    const [di, dj] = DELTAS[side];
+    const neighborCell = { i: cell.i + di, j: cell.j + dj };
+    const inVoid = areas.some(a => a.length >= 3 && pointInPolygonCenter(neighborCell, a, size));
+    if (inVoid) voids.add(cellKey(neighborCell.i, neighborCell.j));
+    const neighbor = inVoid ? null : existing.get(cellKey(neighborCell.i, neighborCell.j));
+    if (neighbor) ensure(side).compatibleWith = neighbor.tags[OPPOSITE[side]];
+    const m = edgeMarkers.get(edgeKey(cellSideEdge(cell, side, size)));
+    if (!m) continue;
+    const c = ensure(side);
+    c.forbid = without(c.forbid, m.tags);
+    c.forbidFeatures = without(c.forbidFeatures, m.features);
+    if (m.tags.length && !(neighbor && tagsMatch(neighbor.tags[OPPOSITE[side]], m.tags))) c.require = m.tags;
+    const missing = m.features.filter(f => !(neighbor?.features?.[OPPOSITE[side]] ?? []).includes(f));
+    if (missing.length) c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), ...missing]);
+  }
+  const allowed = allowedVariants(variants, constraints, compatible);
+  const existingTile = generatedDocs(scene.tiles.contents).find(t => {
+    const tc = tileCell(t, size);
+    return tc && tc.i === cell.i && tc.j === cell.j;
+  }) ?? null;
+  log.debug("candidatesForCell", { cell, constraints, allowed: allowed.length, total: variants.length, voids: [...voids] });
+  return { variants, allowed, constraints, compatible, existingTile };
+}
+
+function pointInPolygonCenter(cell, polygon, size) {
+  const x = (cell.j + 0.5) * size;
+  const y = (cell.i + 0.5) * size;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const crosses = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Place one tile variant by hand in a cell, replacing whatever this module generated there.
+ * The tile's walls are created and existing walls are clipped like during regeneration.
+ */
+export async function placeTileAt(cell, variant, { placeTileWalls = true, mergeWalls: mergeWallsOption = true } = {}) {
+  assertSquareGrid();
+  const scene = canvas.scene;
+  const size = canvas.grid.size;
+  const cellSet = new Set([cellKey(cell.i, cell.j)]);
+  const removed = await clearGeneratedInCells(scene, cellSet, size);
+  const generationId = `manual-${foundry.utils.randomID(8)}`;
+  const anchor = tileAnchorDefaults();
+  const tileDoc = {
+    texture: { src: variant.tile.src, anchorX: anchor.x, anchorY: anchor.y },
+    x: Math.round((cell.j + anchor.x) * size),
+    y: Math.round((cell.i + anchor.y) * size),
+    width: size,
+    height: size,
+    rotation: variant.rotation,
+    flags: { [MODULE_ID]: { generation: generationId, tile: variant.tile.id, rotation: variant.rotation, tags: variant.tags, features: variant.features } }
+  };
+  const segments = [...removed.border];
+  if (placeTileWalls) segments.push(...tileWallsForCell(cell, size, variant.walls));
+  const wallDocs = mergeWalls(segments, { merge: mergeWallsOption }).map(w => ({ c: w.c, door: w.door ?? 0, flags: { [MODULE_ID]: { generation: generationId } } }));
+  log.debug(`placeTileAt (${cell.j}, ${cell.i})`, { tile: variant.tile.id, rotation: variant.rotation, walls: wallDocs.length, removed });
+  await scene.createEmbeddedDocuments("Tile", [tileDoc]);
+  if (wallDocs.length) await scene.createEmbeddedDocuments("Wall", wallDocs);
+  return { generationId, walls: wallDocs.length };
 }

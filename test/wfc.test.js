@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, describeCellConstraints, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
+import { normalizeTags, tagsMatch, rotateTile, normalizeTile, expandVariants, solve, tileFeatures, buildCompatibility, mergeCompatibility, describeCellConstraints, allowedVariants, SIDES, OPPOSITE, DELTAS } from "../scripts/lib/wfc.js";
 import { normalizeMapping } from "../scripts/lib/mapping.js";
 import { cellsInPolygon } from "../scripts/lib/geometry.js";
 
@@ -335,4 +335,30 @@ test("backtracking budget produces a collapse failure instead of hanging", () =>
   const r = sampleSolve({ cells, variants, constraints, seed: 1, maxAttempts: 2, maxBacktracks: 50 });
   assert.equal(r.success, false);
   assert.ok(["constraints", "propagation", "shared", "collapse"].includes(r.failure.stage));
+});
+
+test("feature markers on an outside edge take priority over boundary tags", () => {
+  const variants = expandVariants(sampleTiles);
+  // Two cells on top of each other: the top one must draw a door on its north outline edge.
+  const r = sampleSolve({ cells: [{ i: 0, j: 0 }, { i: 1, j: 0 }], variants, boundaryTags: ["wall"], constraints: [{ n: { requireFeatures: ["door"] } }, {}], seed: 1 });
+  assert.ok(r.success);
+  const tags = r.assignments[0].variant.tags;
+  assert.deepEqual(tags.n, ["door"]);
+  assert.deepEqual(tags.e, ["wall"]);
+  assert.deepEqual(tags.w, ["wall"]);
+  assert.deepEqual(r.assignments[1].variant.tags.s, ["wall"]);
+  const lines = describeCellConstraints({ n: { requireFeatures: ["door"] } }, variants, null, { outside: ["n"], boundaryTags: ["wall"] });
+  assert.ok(!lines.some(l => l.startsWith("north must be exactly")));
+});
+
+test("allowedVariants filters a single cell like the solver does", () => {
+  const variants = expandVariants(sampleTiles);
+  const all = allowedVariants(variants, {}, null);
+  assert.equal(all.length, variants.length);
+  const walls = allowedVariants(variants, { n: { compatibleWith: ["wall"] }, e: { compatibleWith: ["wall"] } }, null);
+  assert.ok(walls.length > 0);
+  for (const v of walls) { assert.deepEqual(v.tags.n, ["wall"]); assert.deepEqual(v.tags.e, ["wall"]); }
+  const doors = allowedVariants(variants, { c: { requireFeatures: ["door"] } }, null);
+  assert.ok(doors.length > 0 && doors.every(v => v.features.c.includes("door")));
+  assert.equal(allowedVariants(variants, { n: { require: ["nothing"] } }, null).length, 0);
 });

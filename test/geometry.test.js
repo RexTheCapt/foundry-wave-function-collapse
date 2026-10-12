@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pointInPolygon, cellsInPolygon, outlineWalls, mergeWalls, tileWallsForCell, drawingToPolygon, pointInOrOnPolygon, wallPartsOutside, splitWallByCells, cellKey, cutDoorsFromWalls } from "../scripts/lib/geometry.js";
+import { pointInPolygon, cellsInPolygon, outlineWalls, mergeWalls, tileWallsForCell, drawingToPolygon, pointInOrOnPolygon, wallPartsOutside, splitWallByCells, cellKey, cutDoorsFromWalls, cellsInPolygonExcluding } from "../scripts/lib/geometry.js";
 import { edgeAtPoint, edgeCellSides, cellSideEdge, edgeKey, edgeEndpoints, markerTargetAtPoint, edgesAlongLine } from "../scripts/lib/edges.js";
 
 test("pointInPolygon", () => {
@@ -147,4 +147,14 @@ test("edgesAlongLine enumerates edges between two edges on one grid line", () =>
   assert.deepEqual(edgesAlongLine(start, { kind: "edge", x: 100, y: 200, dir: "v" }, 100), []);
   assert.deepEqual(edgesAlongLine(start, { kind: "cell", i: 1, j: 1 }, 100), []);
   assert.deepEqual(edgesAlongLine({ x: 100, y: 0, dir: "v" }, { kind: "edge", x: 100, y: 200, dir: "v" }, 100).map(e => e.y), [0, 100, 200]);
+});
+
+test("cellsInPolygonExcluding separates void cells", () => {
+  const polygon = [[0, 0], [400, 0], [400, 200], [0, 200]];
+  const { cells, voids } = cellsInPolygonExcluding(polygon, [[[100, 0], [300, 0], [300, 100], [100, 100]]], 100);
+  assert.equal(cells.length, 6);
+  assert.deepEqual(voids, [{ i: 0, j: 1 }, { i: 0, j: 2 }]);
+  const none = cellsInPolygonExcluding(polygon, [], 100);
+  assert.equal(none.cells.length, 8);
+  assert.equal(none.voids.length, 0);
 });

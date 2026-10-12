@@ -244,6 +244,48 @@ export function mulberry32(seed) {
 }
 
 const cellKey = (i, j) => `${i},${j}`;
+const PLACES = [...SIDES, CENTER];
+
+/**
+ * Build the test a variant must pass for one place (side or center) of a cell, or null when the
+ * place is unconstrained. Boundary tags apply only when the side faces the open outside and no
+ * constraint already dictates the side.
+ */
+function placeTest(place, c, compatTable, boundary) {
+  const dictated = c?.compatibleWith || c?.require || c?.requireFeatures?.length || c?.requireAny?.length;
+  const require = c?.require ? normalizeTags(c.require) : (boundary?.length && !dictated ? normalizeTags(boundary) : null);
+  const compatibleWith = c?.compatibleWith ? normalizeTags(c.compatibleWith) : null;
+  const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
+  const requireFeatures = c?.requireFeatures?.length ? normalizeTags(c.requireFeatures) : null;
+  const forbidFeatures = c?.forbidFeatures?.length ? normalizeTags(c.forbidFeatures) : null;
+  const requireAny = c?.requireAny?.length ? normalizeTags(c.requireAny) : null;
+  if (!require && !compatibleWith && !forbid && !requireFeatures && !forbidFeatures && !requireAny) return null;
+  return v => {
+    const features = v.features?.[place] ?? [];
+    if (requireFeatures && !requireFeatures.every(f => features.includes(f))) return false;
+    if (forbidFeatures && features.some(f => forbidFeatures.includes(f))) return false;
+    if (requireAny && !requireAny.every(e => features.includes(e) || (place !== CENTER && tagsMatch(v.tags[place], [e])))) return false;
+    if (place === CENTER) return true;
+    const tags = v.tags[place];
+    if (require && !tagsMatch(tags, require)) return false;
+    if (compatibleWith && !tagsMatch(tags, compatibleWith, compatTable)) return false;
+    if (forbid && tags.some(t => forbid.includes(t))) return false;
+    return true;
+  };
+}
+
+/**
+ * Variants that satisfy a single cell's constraints, using the same rules as `solve`. Sides
+ * without a constraint are unconstrained (no boundary tags are applied).
+ * @param {object[]} variants
+ * @param {Record<string, object>} cellConstraints
+ * @param {Record<string, string[]>|null} compatible
+ */
+export function allowedVariants(variants, cellConstraints, compatible = null) {
+  const compatTable = buildCompatibility(compatible);
+  const tests = PLACES.map(place => placeTest(place, cellConstraints?.[place], compatTable, null)).filter(Boolean);
+  return variants.filter(v => tests.every(t => t(v)));
+}
 
 /**
  * Solve a set of cells with the given variants.
@@ -326,31 +368,11 @@ export function solve({ cells, variants, boundaryTags = null, compatible = null,
 
   // allowed[k][s][a] === 1 when variant a satisfies the constraints of cell k on side SIDES[s]
   // (index 4 is the tile center).
-  const PLACES = [...SIDES, CENTER];
   const allowedMasks = cells.map((cell, k) => PLACES.map((place, s) => {
     const c = constraints?.[k]?.[place];
-    // Boundary tags apply to sides facing the open outside: not to sides that face an existing
-    // tile (compatibleWith) and not when a marker already dictates the side (require).
-    const outside = place !== CENTER && neighbors[k][s] === -1 && !c?.compatibleWith && !c?.require;
-    const require = c?.require ? normalizeTags(c.require) : (outside && boundary.length ? boundary : null);
-    const compatibleWith = c?.compatibleWith ? normalizeTags(c.compatibleWith) : null;
-    const forbid = c?.forbid ? normalizeTags(c.forbid) : null;
-    const requireFeatures = c?.requireFeatures?.length ? normalizeTags(c.requireFeatures) : null;
-    const forbidFeatures = c?.forbidFeatures?.length ? normalizeTags(c.forbidFeatures) : null;
-    const requireAny = c?.requireAny?.length ? normalizeTags(c.requireAny) : null;
-    if (!require && !compatibleWith && !forbid && !requireFeatures && !forbidFeatures && !requireAny) return null;
-    return Uint8Array.from(variants, v => {
-      const features = v.features?.[place] ?? [];
-      if (requireFeatures && !requireFeatures.every(f => features.includes(f))) return 0;
-      if (forbidFeatures && features.some(f => forbidFeatures.includes(f))) return 0;
-      if (requireAny && !requireAny.every(e => features.includes(e) || (place !== CENTER && tagsMatch(v.tags[place], [e])))) return 0;
-      if (place === CENTER) return 1;
-      const tags = v.tags[place];
-      if (require && !tagsMatch(tags, require)) return 0;
-      if (compatibleWith && !tagsMatch(tags, compatibleWith, compatTable)) return 0;
-      if (forbid && tags.some(t => forbid.includes(t))) return 0;
-      return 1;
-    });
+    const outside = place !== CENTER && neighbors[k][s] === -1;
+    const test = placeTest(place, c, compatTable, outside ? boundary : null);
+    return test ? Uint8Array.from(variants, v => (test(v) ? 1 : 0)) : null;
   }));
 
   // Binary "at least one side offers the feature / carries the tags" requirements, as masks.
@@ -401,7 +423,7 @@ export function describeCellConstraints(cellConstraints, variants, compatible = 
   for (const place of [...SIDES, CENTER]) {
     const c = cellConstraints?.[place] ?? {};
     const name = { n: "north", e: "east", s: "south", w: "west", c: "center" }[place];
-    const open = outside.includes(place) && !c.compatibleWith && !c.require;
+    const open = outside.includes(place) && !c.compatibleWith && !c.require && !c.requireFeatures?.length && !c.requireAny?.length;
     const require = c.require ? normalizeTags(c.require) : (open && boundary.length ? boundary : null);
     if (require) lines.push(`${name} must be exactly [${require}] (${count(v => tagsMatch(v.tags[place], require))} variants)`);
     if (c.compatibleWith) {

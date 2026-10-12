@@ -6,6 +6,8 @@ export const MAPPING_FILE = "mapping.json";
 
 export const TOOL_OUTLINE = "wfc-outline";
 export const TOOL_MARKERS = "wfc-markers";
+export const TOOL_AREAS = "wfc-areas";
+export const TOOL_PICKER = "wfc-picker";
 export const TOOL_FROM_DRAWING = "wfc-from-drawing";
 export const TOOL_COLLECTIONS = "wfc-collections";
 export const TOOL_CLEAR = "wfc-clear";

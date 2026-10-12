@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0
+
+- Empty areas: outline areas that must stay blank. They are saved with the scene, drawn in red,
+  treated as outside by the generator (walls, boundary tags, previous tiles removed), and edge
+  markers on their border take priority over the boundary tags.
+- Feature markers on an outline edge also take priority over the boundary tags.
+- Tile picker tool: click a cell to see the tile variants the solver would accept there and place
+  one by hand. Walls are created and clipped like during generation.
+
 ## 0.4.4
 
 - Solver rewritten as a backtracking search: dead ends are undone instead of restarting the whole

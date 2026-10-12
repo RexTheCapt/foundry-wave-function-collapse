@@ -61,6 +61,25 @@ export function cellsInPolygon(polygon, size) {
   return cells;
 }
 
+/**
+ * Split the cells of a polygon into those to generate and those covered by an empty area.
+ * @param {number[][]} polygon
+ * @param {number[][][]} areas  Polygons that must stay empty.
+ * @param {number} size
+ * @returns {{cells: {i: number, j: number}[], voids: {i: number, j: number}[]}}
+ */
+export function cellsInPolygonExcluding(polygon, areas, size) {
+  const cells = [];
+  const voids = [];
+  for (const cell of cellsInPolygon(polygon, size)) {
+    const cx = (cell.j + 0.5) * size;
+    const cy = (cell.i + 0.5) * size;
+    if (areas.some(a => a.length >= 3 && pointInPolygon(cx, cy, a))) voids.push(cell);
+    else cells.push(cell);
+  }
+  return { cells, voids };
+}
+
 /** Pixel segment of one side of a cell. */
 export function cellEdgeSegment(cell, side, size) {
   const x = cell.j * size;

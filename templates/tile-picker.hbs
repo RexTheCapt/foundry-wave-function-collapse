@@ -1,0 +1,22 @@
+<div class="wfc-part wfc-part-picker">
+  <p class="hint">{{localize "WFC.Picker.Hint" cell=cell allowed=allowedCount total=totalCount}}{{#if current}} {{localize "WFC.Picker.Current" name=current}}{{/if}}</p>
+  {{#if rules.length}}
+  <details class="wfc-picker-rules">
+    <summary>{{localize "WFC.Picker.Rules"}}</summary>
+    <ul>{{#each rules as |r|}}<li>{{r}}</li>{{/each}}</ul>
+  </details>
+  {{/if}}
+  <div class="wfc-toolbar">
+    <button type="button" data-action="toggleAll"><i class="fa-solid {{#if showAll}}fa-filter{{else}}fa-filter-circle-xmark{{/if}}"></i> {{#if showAll}}{{localize "WFC.Picker.OnlyAllowed"}}{{else}}{{localize "WFC.Picker.ShowAll"}}{{/if}}</button>
+  </div>
+  <div class="wfc-picker-grid">
+    {{#each candidates as |c|}}
+    <button type="button" class="wfc-picker-card{{#unless c.allowed}} wfc-picker-blocked{{/unless}}" data-action="pick" data-index="{{c.index}}" title="{{c.tags}}">
+      <img src="{{c.src}}" alt="{{c.name}}" style="transform: rotate({{c.rotation}}deg)" loading="lazy">
+      <span class="wfc-picker-name">{{c.name}}{{#if c.rotation}} ({{c.rotation}}°){{/if}}</span>
+    </button>
+    {{else}}
+    <p class="wfc-empty">{{localize "WFC.Picker.None"}}</p>
+    {{/each}}
+  </div>
+</div>

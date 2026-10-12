@@ -9,9 +9,23 @@ import { cellsInPolygon } from "./lib/geometry.js";
 import { log } from "./log.js";
 
 export class OutlineTool {
-  /** @param {{onFinish: (polygon: number[][]) => Promise<void>}} options */
-  constructor({ onFinish }) {
+  /**
+   * @param {object} options
+   * @param {(polygon: number[][]) => Promise<void>} options.onFinish  Called with the closed polygon.
+   * @param {(point: {x: number, y: number}) => Promise<void>} [options.onRightClickIdle]  Right click
+   *   while no outline is in progress.
+   * @param {number} [options.color]  Line color.
+   * @param {number} [options.fill]  Highlight color for the cells inside while busy.
+   * @param {string} [options.hint]  Localization key of the activation hint.
+   * @param {boolean} [options.highlightCells]  Fill the covered cells while `onFinish` runs.
+   */
+  constructor({ onFinish, onRightClickIdle = null, color = 0xff9f1c, fill = 0x4fa3ff, hint = "WFC.Tools.OutlineHint", highlightCells = true }) {
     this.onFinish = onFinish;
+    this.onRightClickIdle = onRightClickIdle;
+    this.color = color;
+    this.fill = fill;
+    this.hint = hint;
+    this.highlightCells = highlightCells;
     this.active = false;
     this.busy = false;
     this.points = [];
@@ -39,7 +53,7 @@ export class OutlineTool {
     view.addEventListener("pointermove", this._onPointerMove);
     window.addEventListener("keydown", this._onKeyDown, { capture: true });
     log.debug("outline tool activated; listening on", view, "graphics parent:", parent?.constructor?.name);
-    ui.notifications.info(game.i18n.localize("WFC.Tools.OutlineHint"));
+    ui.notifications.info(game.i18n.localize(this.hint));
   }
 
   deactivate() {
@@ -92,6 +106,10 @@ export class OutlineTool {
         this.#draw();
         event.preventDefault();
         event.stopPropagation();
+      } else if (this.onRightClickIdle) {
+        const point = this.#toCanvas(event);
+        log.debug("outline: right click while idle", point);
+        void this.onRightClickIdle(point);
       }
       return;
     }
@@ -159,14 +177,14 @@ export class OutlineTool {
     if (!g) return;
     g.clear();
     const size = canvas.grid.size;
-    if (highlightCells && this.points.length >= 3) {
+    if (highlightCells && this.highlightCells && this.points.length >= 3) {
       const cells = cellsInPolygon(this.points.map(p => [p.x, p.y]), size);
-      g.beginFill(0x4fa3ff, 0.2);
+      g.beginFill(this.fill, 0.2);
       for (const c of cells) g.drawRect(c.j * size, c.i * size, size, size);
       g.endFill();
     }
     if (this.points.length) {
-      g.lineStyle(4, 0xff9f1c, 0.9);
+      g.lineStyle(4, this.color, 0.9);
       g.moveTo(this.points[0].x, this.points[0].y);
       for (const p of this.points.slice(1)) g.lineTo(p.x, p.y);
       if (this.cursor && !this.busy) {
@@ -180,14 +198,14 @@ export class OutlineTool {
           g.lineTo(this.points[0].x, this.points[0].y);
         }
       } else if (this.points.length >= 3) {
-        g.lineStyle(4, 0xff9f1c, 0.9);
+        g.lineStyle(4, this.color, 0.9);
         const last = this.points[this.points.length - 1];
         g.moveTo(last.x, last.y);
         g.lineTo(this.points[0].x, this.points[0].y);
       }
       g.lineStyle(0);
       this.points.forEach((p, k) => {
-        g.beginFill(k === 0 ? 0x4fa3ff : 0xff9f1c, 1);
+        g.beginFill(k === 0 ? this.fill : this.color, 1);
         g.drawCircle(p.x, p.y, Math.max(5, size * 0.08));
         g.endFill();
       });

@@ -1,10 +1,12 @@
-import { MODULE_ID, SAMPLE_COLLECTION, TOOL_OUTLINE, TOOL_MARKERS, TOOL_FROM_DRAWING, TOOL_COLLECTIONS, TOOL_CLEAR } from "./constants.js";
+import { MODULE_ID, SAMPLE_COLLECTION, TOOL_OUTLINE, TOOL_MARKERS, TOOL_AREAS, TOOL_PICKER, TOOL_FROM_DRAWING, TOOL_COLLECTIONS, TOOL_CLEAR } from "./constants.js";
+import { PickerTool } from "./picker.js";
+import { addEmptyArea, removeEmptyAreaAt, clearEmptyAreas, getEmptyAreas } from "./areas.js";
 import { MarkerLayer, MarkerTool, clearMarkers, getMarkers } from "./markers.js";
 import { OutlineTool } from "./outline-tool.js";
 import { log } from "./log.js";
-import { assertSquareGrid, clearGenerated, generateDungeon } from "./generator.js";
+import { assertSquareGrid, clearGenerated, generateDungeon, candidatesForCell, placeTileAt } from "./generator.js";
 import { getRegisteredDirs, loadCollections } from "./collections.js";
-import { cellsInPolygon, drawingToPolygon } from "./lib/geometry.js";
+import { cellsInPolygonExcluding, drawingToPolygon } from "./lib/geometry.js";
 import * as wfc from "./lib/wfc.js";
 import * as geometry from "./lib/geometry.js";
 import { CollectionsApp } from "./apps/collections-app.js";
@@ -13,6 +15,20 @@ import { GenerateDialog } from "./apps/generate-dialog.js";
 const outlineTool = new OutlineTool({ onFinish: polygon => generateForPolygons([polygon]) });
 const markerLayer = new MarkerLayer();
 const markerTool = new MarkerTool({ layer: markerLayer });
+const pickerTool = new PickerTool();
+const areaTool = new OutlineTool({
+  color: 0xe63946,
+  fill: 0xe63946,
+  hint: "WFC.Tools.AreasHint",
+  highlightCells: false,
+  onFinish: async polygon => {
+    await addEmptyArea(polygon);
+    ui.notifications.info(game.i18n.localize("WFC.Areas.Added"));
+  },
+  onRightClickIdle: async point => {
+    if (await removeEmptyAreaAt(point.x, point.y)) ui.notifications.info(game.i18n.localize("WFC.Areas.Removed"));
+  }
+});
 
 /* -------------------------------------------- */
 /*  Settings                                    */
@@ -105,8 +121,9 @@ async function generateForPolygons(polygons) {
     return;
   }
   const size = canvas.grid.size;
-  const cellCount = polygons.reduce((n, p) => n + cellsInPolygon(p, size).length, 0);
-  log.debug(`grid size ${size}, ${cellCount} cells inside ${polygons.length} polygon(s)`);
+  const areas = getEmptyAreas();
+  const cellCount = polygons.reduce((n, p) => n + cellsInPolygonExcluding(p, areas, size).cells.length, 0);
+  log.debug(`grid size ${size}, ${cellCount} cells inside ${polygons.length} polygon(s) after excluding ${areas.length} empty areas`);
   if (!cellCount) {
     ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCells"));
     return;
@@ -165,6 +182,7 @@ async function clearDialog() {
       { action: "last", label: game.i18n.localize("WFC.Clear.Last"), icon: "fa-solid fa-rotate-left", default: true },
       { action: "all", label: game.i18n.localize("WFC.Clear.All"), icon: "fa-solid fa-trash" },
       { action: "markers", label: game.i18n.format("WFC.Clear.Markers", { count: getMarkers().length }), icon: "fa-solid fa-door-open" },
+      { action: "areas", label: game.i18n.format("WFC.Clear.Areas", { count: getEmptyAreas().length }), icon: "fa-solid fa-ban" },
       { action: "cancel", label: game.i18n.localize("WFC.Clear.Cancel"), icon: "fa-solid fa-xmark" }
     ],
     rejectClose: false
@@ -173,6 +191,9 @@ async function clearDialog() {
   else if (choice === "markers") {
     await clearMarkers();
     ui.notifications.info(game.i18n.localize("WFC.Clear.MarkersDone"));
+  } else if (choice === "areas") {
+    await clearEmptyAreas();
+    ui.notifications.info(game.i18n.localize("WFC.Clear.AreasDone"));
   }
 }
 
@@ -190,7 +211,7 @@ function getActiveTool() {
   return nameOf(ui.controls?.tool) ?? ui.controls?.activeTool ?? null;
 }
 
-const TOOLS = { [TOOL_OUTLINE]: () => outlineTool, [TOOL_MARKERS]: () => markerTool };
+const TOOLS = { [TOOL_OUTLINE]: () => outlineTool, [TOOL_MARKERS]: () => markerTool, [TOOL_AREAS]: () => areaTool, [TOOL_PICKER]: () => pickerTool };
 
 function syncOutlineTool() {
   const control = getActiveControl();
@@ -210,6 +231,8 @@ function registerControls(controls) {
   const tileTools = [
     { name: TOOL_OUTLINE, title: "WFC.Tools.Outline", icon: "fa-solid fa-draw-polygon" },
     { name: TOOL_MARKERS, title: "WFC.Tools.Markers", icon: "fa-solid fa-door-open" },
+    { name: TOOL_AREAS, title: "WFC.Tools.Areas", icon: "fa-solid fa-ban" },
+    { name: TOOL_PICKER, title: "WFC.Tools.Picker", icon: "fa-solid fa-hand-pointer" },
     { name: TOOL_COLLECTIONS, title: "WFC.Tools.Collections", icon: "fa-solid fa-layer-group", button: true, handler: () => CollectionsApp.open() },
     { name: TOOL_CLEAR, title: "WFC.Tools.Clear", icon: "fa-solid fa-eraser", button: true, handler: clearDialog }
   ];
@@ -290,6 +313,10 @@ Hooks.once("ready", () => {
     markerTool,
     getMarkers,
     clearMarkers,
+    getEmptyAreas,
+    clearEmptyAreas,
+    candidatesForCell,
+    placeTileAt,
     wfc,
     geometry
   };
@@ -300,8 +327,9 @@ Hooks.on("getSceneControlButtons", registerControls);
 Hooks.on("renderSceneControls", syncOutlineTool);
 Hooks.on("canvasReady", syncOutlineTool);
 Hooks.on("activateTilesLayer", () => { log.debug("activateTilesLayer"); syncOutlineTool(); });
-Hooks.on("deactivateTilesLayer", () => { log.debug("deactivateTilesLayer"); outlineTool.deactivate(); markerTool.deactivate(); markerLayer.hide(); });
-Hooks.on("canvasTearDown", () => { log.debug("canvasTearDown"); outlineTool.deactivate(); markerTool.deactivate(); markerLayer.hide(); });
+const deactivateAll = () => { for (const get of Object.values(TOOLS)) get().deactivate(); markerLayer.hide(); };
+Hooks.on("deactivateTilesLayer", () => { log.debug("deactivateTilesLayer"); deactivateAll(); });
+Hooks.on("canvasTearDown", () => { log.debug("canvasTearDown"); deactivateAll(); });
 Hooks.on("updateScene", (scene, changes) => {
   if (scene.id !== canvas.scene?.id) return;
   if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}`) || foundry.utils.hasProperty(changes, `flags.-=${MODULE_ID}`)) {
