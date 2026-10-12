@@ -1,5 +1,6 @@
 import { MODULE_ID, TEMPLATES } from "../constants.js";
 import { normalizeTags } from "../lib/wfc.js";
+import { getMarkers } from "../markers.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -57,11 +58,16 @@ export class GenerateDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
     const selected = collections.filter(c => c.checked);
     const boundary = last.boundaryTags ?? (selected.find(c => c.boundary)?.boundary ?? collections.find(c => c.boundary)?.boundary ?? "");
+    const restrictedDefault = this.collections.map(c => c.mapping.restricted.join(", ")).find(Boolean) ?? "";
+    const markers = getMarkers();
     return {
       collections,
       cellCount: this.cellCount,
+      markerCount: markers.length,
       seed: foundry.utils.randomID(8),
       boundaryTags: boundary,
+      restrictedTags: last.restrictedTags ?? restrictedDefault,
+      matchSurroundings: last.matchSurroundings ?? true,
       placeOutlineWalls: last.placeOutlineWalls ?? true,
       placeTileWalls: last.placeTileWalls ?? true,
       clearExisting: last.clearExisting ?? true,
@@ -112,6 +118,8 @@ export class GenerateDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       collectionDirs: selected.map(c => c.dir),
       seed: form.elements.seed.value.trim() || foundry.utils.randomID(8),
       boundaryTags: normalizeTags(form.elements.boundaryTags.value),
+      restrictedTags: normalizeTags(form.elements.restrictedTags.value),
+      matchSurroundings: form.elements.matchSurroundings.checked,
       placeOutlineWalls: form.elements.placeOutlineWalls.checked,
       placeTileWalls: form.elements.placeTileWalls.checked,
       clearExisting: form.elements.clearExisting.checked,
@@ -120,6 +128,8 @@ export class GenerateDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     await game.settings.set(MODULE_ID, "lastSelection", {
       collections: options.collectionDirs,
       boundaryTags: form.elements.boundaryTags.value.trim(),
+      restrictedTags: form.elements.restrictedTags.value.trim(),
+      matchSurroundings: options.matchSurroundings,
       placeOutlineWalls: options.placeOutlineWalls,
       placeTileWalls: options.placeTileWalls,
       clearExisting: options.clearExisting,

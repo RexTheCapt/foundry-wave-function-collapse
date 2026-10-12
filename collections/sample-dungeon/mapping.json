@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "Sample dungeon",
-  "description": "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline.",
+  "description": "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline. door-wall.png draws a complete door on a wall-tagged side, door-mid.png has a door across the middle; restrict \"door\" to place them only at markers.",
   "boundary": [
     "wall"
   ],
@@ -399,6 +399,100 @@
         }
       ],
       "weight": 0.4,
+      "rotate": true
+    },
+    "door-wall.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "floor"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            0.35,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.35,
+            0,
+            0.65,
+            0
+          ],
+          "door": 1
+        },
+        {
+          "c": [
+            0.65,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        }
+      ],
+      "weight": 0.5,
+      "rotate": true
+    },
+    "door-mid.png": {
+      "tags": {
+        "n": [
+          "wall"
+        ],
+        "e": [
+          "floor"
+        ],
+        "s": [
+          "wall"
+        ],
+        "w": [
+          "floor"
+        ]
+      },
+      "walls": [
+        {
+          "c": [
+            0,
+            0,
+            1,
+            0
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0,
+            1,
+            1,
+            1
+          ],
+          "door": 0
+        },
+        {
+          "c": [
+            0.5,
+            0,
+            0.5,
+            1
+          ],
+          "door": 1
+        }
+      ],
+      "weight": 0.5,
       "rotate": true
     }
   }

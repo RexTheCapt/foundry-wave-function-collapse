@@ -3,9 +3,11 @@
  */
 
 import { MODULE_ID } from "./constants.js";
-import { cellsInPolygon, outlineWalls, tileWallsForCell, mergeWalls, pointInPolygon, pointInOrOnPolygon } from "./lib/geometry.js";
-import { expandVariants, solve } from "./lib/wfc.js";
-import { collectionTiles, loadCollections } from "./collections.js";
+import { cellsInPolygon, cellEdgeSegment, tileWallsForCell, mergeWalls, splitWallByCells, cellKey } from "./lib/geometry.js";
+import { expandVariants, solve, normalizeTags, normalizeTile, rotateTile, tileFeatures, SIDES, OPPOSITE, DELTAS, CENTER } from "./lib/wfc.js";
+import { edgeCellSides } from "./lib/edges.js";
+import { collectionTiles, loadCollections, getRegisteredDirs } from "./collections.js";
+import { getMarkers } from "./markers.js";
 import { log } from "./log.js";
 
 export function assertSquareGrid() {
@@ -17,6 +19,53 @@ function generatedDocs(collection) {
   return collection.filter(d => d.flags?.[MODULE_ID]?.generation);
 }
 
+/** Grid cell of a generated 1x1 tile document, or null when it does not sit on the grid. */
+function tileCell(tile, size) {
+  if (Math.abs(tile.width - size) > 1 || Math.abs(tile.height - size) > 1) return null;
+  const i = Math.round(tile.y / size);
+  const j = Math.round(tile.x / size);
+  if (Math.abs(tile.y - i * size) > 1 || Math.abs(tile.x - j * size) > 1) return null;
+  return { i, j };
+}
+
+/**
+ * Side tags and door features of every generated tile on the scene, keyed by cell.
+ * Tiles placed by older versions carry no tags flag; those are rebuilt from the collections.
+ * @returns {Promise<Map<string, {tags: Record<string, string[]>, features: Record<string, string[]>}>>}
+ */
+async function existingTiles(scene, size) {
+  const result = new Map();
+  let lookup = null;
+  for (const tile of generatedDocs(scene.tiles.contents)) {
+    const cell = tileCell(tile, size);
+    if (!cell) continue;
+    const flags = tile.flags[MODULE_ID];
+    let tags = null;
+    let features = null;
+    if (flags.tags) {
+      tags = {};
+      for (const side of SIDES) tags[side] = normalizeTags(flags.tags[side]);
+      features = {};
+      for (const place of [...SIDES, CENTER]) features[place] = normalizeTags(flags.features?.[place]);
+    } else if (flags.tile) {
+      if (!lookup) {
+        lookup = new Map();
+        for (const col of await loadCollections(getRegisteredDirs())) {
+          for (const t of collectionTiles(col)) lookup.set(t.id, t);
+        }
+      }
+      const base = lookup.get(flags.tile);
+      if (base) {
+        const rotated = rotateTile(normalizeTile(base), flags.rotation ?? tile.rotation ?? 0);
+        tags = rotated.tags;
+        features = tileFeatures(rotated.walls);
+      }
+    }
+    if (tags) result.set(cellKey(cell.i, cell.j), { tags, features });
+  }
+  return result;
+}
+
 /**
  * Generate a dungeon inside a polygon.
  *
@@ -24,7 +73,9 @@ function generatedDocs(collection) {
  * @param {number[][]} options.polygon
  * @param {string[]} options.collectionDirs
  * @param {string} [options.seed]
- * @param {string|string[]} [options.boundaryTags]
+ * @param {string|string[]} [options.boundaryTags]  Required on sides facing outside the outline.
+ * @param {string|string[]} [options.restrictedTags]  Tags that may only appear on marked edges.
+ * @param {boolean} [options.matchSurroundings]  Reuse generated tiles next to the outline as constraints.
  * @param {boolean} [options.placeOutlineWalls]
  * @param {boolean} [options.placeTileWalls]
  * @param {boolean} [options.clearExisting]
@@ -36,6 +87,8 @@ export async function generateDungeon({
   collectionDirs,
   seed = "",
   boundaryTags = "",
+  restrictedTags = "",
+  matchSurroundings = true,
   placeOutlineWalls = true,
   placeTileWalls = true,
   clearExisting = true,
@@ -45,7 +98,9 @@ export async function generateDungeon({
   const scene = canvas.scene;
   const size = canvas.grid.size;
   const cells = cellsInPolygon(polygon, size);
-  log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, gridSize: size });
+  const cellSet = new Set(cells.map(c => cellKey(c.i, c.j)));
+  const cellIndex = new Map(cells.map((c, k) => [cellKey(c.i, c.j), k]));
+  log.debug("generateDungeon", { polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls: mergeWallsOption, cells: cells.length, gridSize: size });
   if (!cells.length) {
     ui.notifications.warn(game.i18n.localize("WFC.Generate.NoCells"));
     return null;
@@ -59,8 +114,74 @@ export async function generateDungeon({
   }
   const variants = expandVariants(tiles);
   log.debug(`${tiles.length} tiles expanded to ${variants.length} variants`);
+
+  // Per-cell constraints: restricted tags and features first, then surrounding tiles, then markers.
+  const constraints = cells.map(() => ({}));
+  const ensure = (k, place) => (constraints[k][place] ??= {});
+  const without = (list, remove) => (list ?? []).filter(x => !remove.includes(x));
+  const restricted = normalizeTags(restrictedTags);
+  if (restricted.length) {
+    for (let k = 0; k < cells.length; k++) {
+      for (const side of SIDES) Object.assign(ensure(k, side), { forbid: restricted, forbidFeatures: restricted });
+      ensure(k, CENTER).forbidFeatures = restricted;
+    }
+  }
+  const existing = await existingTiles(scene, size);
+  let surroundingSides = 0;
+  if (matchSurroundings) {
+    cells.forEach((cell, k) => {
+      for (const side of SIDES) {
+        const [di, dj] = DELTAS[side];
+        const neighborKey = cellKey(cell.i + di, cell.j + dj);
+        if (cellSet.has(neighborKey)) continue;
+        const neighbor = existing.get(neighborKey);
+        if (!neighbor) continue;
+        ensure(k, side).require = neighbor.tags[OPPOSITE[side]];
+        surroundingSides++;
+      }
+    });
+  }
+  const markers = getMarkers(scene);
+  const sharedFeatures = [];
+  let appliedMarkers = 0;
+  for (const m of markers) {
+    if (m.kind === "cell") {
+      const k = cellIndex.get(cellKey(m.i, m.j));
+      if (k === undefined) continue;
+      const c = ensure(k, CENTER);
+      c.requireFeatures = m.features;
+      c.forbidFeatures = without(c.forbidFeatures, m.features);
+      appliedMarkers++;
+      continue;
+    }
+    const ends = edgeCellSides(m, size).map(x => ({ ...x, k: cellIndex.get(cellKey(x.cell.i, x.cell.j)) }));
+    const inside = ends.filter(x => x.k !== undefined);
+    if (!inside.length) continue;
+    appliedMarkers++;
+    for (const x of inside) {
+      const c = ensure(x.k, x.side);
+      if (m.tags.length) c.require = m.tags;
+      c.forbidFeatures = without(c.forbidFeatures, m.features);
+    }
+    if (!m.features.length) continue;
+    if (inside.length === 2) {
+      const [A, B] = inside;
+      for (const feature of m.features) sharedFeatures.push({ a: A.k, sideA: A.side, b: B.k, sideB: B.side, feature });
+    } else {
+      const inner = inside[0];
+      const outer = ends.find(x => x.k === undefined);
+      const outerFeatures = existing.get(cellKey(outer.cell.i, outer.cell.j))?.features?.[outer.side] ?? [];
+      const missing = m.features.filter(f => !outerFeatures.includes(f));
+      if (missing.length) {
+        const c = ensure(inner.k, inner.side);
+        c.requireFeatures = normalizeTags([...(c.requireFeatures ?? []), ...missing]);
+      }
+    }
+  }
+  log.debug(`constraints: ${restricted.length ? `restricted [${restricted}]` : "no restricted tags"}, ${surroundingSides} sides matched to surrounding tiles, ${appliedMarkers}/${markers.length} markers inside the outline, ${sharedFeatures.length} shared feature requirements`);
+
   const started = performance.now();
-  const result = solve({ cells, variants, boundaryTags, seed: String(seed) });
+  const result = solve({ cells, variants, boundaryTags, constraints, sharedFeatures, seed: String(seed) });
   log.debug(`solve finished in ${Math.round(performance.now() - started)} ms`, { success: result.success, attempts: result.attempts, failedCell: result.failedCell });
   if (!result.success) {
     const cell = result.failedCell;
@@ -69,6 +190,15 @@ export async function generateDungeon({
       cell: cell ? `${cell.j + 1}, ${cell.i + 1}` : "?"
     }));
     return null;
+  }
+
+  // Remove what was generated here before. Wall pieces on the border of the region are kept in
+  // the pool so a neighbour's door or wall on a shared edge survives the regeneration.
+  let borderWalls = [];
+  if (clearExisting) {
+    const removed = await clearGeneratedInCells(scene, cellSet, size);
+    borderWalls = removed.border;
+    log.debug("cleared previous generation inside the outline", { tiles: removed.tiles, walls: removed.walls, clipped: removed.clipped, border: borderWalls.length });
   }
 
   const generationId = foundry.utils.randomID();
@@ -80,24 +210,31 @@ export async function generateDungeon({
     width: size,
     height: size,
     rotation: variant.rotation,
-    flags: { [MODULE_ID]: { generation: generationId, tile: variant.tile.id, rotation: variant.rotation } }
+    flags: { [MODULE_ID]: { generation: generationId, tile: variant.tile.id, rotation: variant.rotation, tags: variant.tags, features: variant.features } }
   }));
 
-  const segments = [];
+  const segments = [...borderWalls];
   if (placeTileWalls) {
     for (const { cell, variant } of result.assignments) segments.push(...tileWallsForCell(cell, size, variant.walls));
   }
-  if (placeOutlineWalls) segments.push(...outlineWalls(cells, size));
+  if (placeOutlineWalls) {
+    // Outline walls close the region off from the outside, but not from existing generated tiles.
+    for (const cell of cells) {
+      for (const side of SIDES) {
+        const [di, dj] = DELTAS[side];
+        const neighborKey = cellKey(cell.i + di, cell.j + dj);
+        if (cellSet.has(neighborKey)) continue;
+        if (matchSurroundings && existing.has(neighborKey)) continue;
+        segments.push({ c: cellEdgeSegment(cell, side, size), door: 0 });
+      }
+    }
+  }
   const wallDocs = mergeWalls(segments, { merge: mergeWallsOption }).map(w => ({
     c: w.c,
     door: w.door ?? 0,
     flags
   }));
 
-  if (clearExisting) {
-    const removed = await clearGeneratedInPolygon(polygon);
-    log.debug("cleared previous generation inside polygon", removed);
-  }
   log.debug(`creating ${tileDocs.length} tiles and ${wallDocs.length} walls (generation ${generationId})`);
   if (tileDocs.length) await scene.createEmbeddedDocuments("Tile", tileDocs);
   if (wallDocs.length) await scene.createEmbeddedDocuments("Wall", wallDocs);
@@ -106,15 +243,37 @@ export async function generateDungeon({
   return { generationId, tiles: tileDocs.length, walls: wallDocs.length };
 }
 
-/** Remove generated tiles and walls that lie inside the polygon. */
-export async function clearGeneratedInPolygon(polygon) {
-  const scene = canvas.scene;
-  const tiles = generatedDocs(scene.tiles.contents).filter(t => pointInPolygon(t.x + t.width / 2, t.y + t.height / 2, polygon));
-  const walls = generatedDocs(scene.walls.contents).filter(w => {
-    const [x1, y1, x2, y2] = w.c;
-    return pointInOrOnPolygon(x1, y1, polygon, 1) && pointInOrOnPolygon(x2, y2, polygon, 1);
+/**
+ * Remove generated tiles inside the cell set and clip generated walls to the outside of it.
+ * Walls that cross the region border are shortened rather than deleted. Pieces that ran along
+ * the border are returned so the caller can re-create them.
+ */
+export async function clearGeneratedInCells(scene, cellSet, size) {
+  const tiles = generatedDocs(scene.tiles.contents).filter(t => {
+    const i = Math.floor((t.y + t.height / 2) / size);
+    const j = Math.floor((t.x + t.width / 2) / size);
+    return cellSet.has(cellKey(i, j));
   });
-  return deleteDocs(scene, tiles, walls);
+  const wallIds = [];
+  const replacements = [];
+  const border = [];
+  for (const wall of generatedDocs(scene.walls.contents)) {
+    const split = splitWallByCells({ c: wall.c, door: wall.door ?? 0 }, cellSet, size);
+    const unchanged = split.outside.length === 1 && !split.border.length && !split.inside.length
+      && split.outside[0].c.every((v, k) => v === wall.c[k]);
+    if (unchanged) continue;
+    wallIds.push(wall.id);
+    border.push(...split.border);
+    if (split.outside.length) {
+      const data = wall.toObject();
+      delete data._id;
+      for (const part of split.outside) replacements.push({ ...data, c: part.c });
+    }
+  }
+  if (tiles.length) await scene.deleteEmbeddedDocuments("Tile", tiles.map(t => t.id));
+  if (wallIds.length) await scene.deleteEmbeddedDocuments("Wall", wallIds);
+  if (replacements.length) await scene.createEmbeddedDocuments("Wall", replacements);
+  return { tiles: tiles.length, walls: wallIds.length, clipped: replacements.length, border };
 }
 
 /**
@@ -133,14 +292,10 @@ export async function clearGenerated(mode = "last") {
   const tiles = scene.tiles.contents.filter(match);
   const walls = scene.walls.contents.filter(match);
   log.debug(`clearGenerated(${mode}): last generation ${last || "none"}, removing ${tiles.length} tiles and ${walls.length} walls`);
-  const result = await deleteDocs(scene, tiles, walls);
+  if (tiles.length) await scene.deleteEmbeddedDocuments("Tile", tiles.map(t => t.id));
+  if (walls.length) await scene.deleteEmbeddedDocuments("Wall", walls.map(w => w.id));
+  const result = { tiles: tiles.length, walls: walls.length };
   if (result.tiles + result.walls === 0) ui.notifications.info(game.i18n.localize("WFC.Clear.Nothing"));
   else ui.notifications.info(game.i18n.format("WFC.Clear.Done", result));
   return result;
-}
-
-async function deleteDocs(scene, tiles, walls) {
-  if (tiles.length) await scene.deleteEmbeddedDocuments("Tile", tiles.map(t => t.id));
-  if (walls.length) await scene.deleteEmbeddedDocuments("Wall", walls.map(w => w.id));
-  return { tiles: tiles.length, walls: walls.length };
 }

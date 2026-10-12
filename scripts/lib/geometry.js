@@ -61,8 +61,8 @@ export function cellsInPolygon(polygon, size) {
   return cells;
 }
 
-/** Pixel coordinates of a cell's four corners' edges, keyed by side. */
-function cellEdge(cell, side, size) {
+/** Pixel segment of one side of a cell. */
+export function cellEdgeSegment(cell, side, size) {
   const x = cell.j * size;
   const y = cell.i * size;
   switch (side) {
@@ -87,7 +87,7 @@ export function outlineWalls(cells, size) {
     for (const side of SIDES) {
       const [di, dj] = DELTAS[side];
       if (set.has(`${cell.i + di},${cell.j + dj}`)) continue;
-      walls.push({ c: cellEdge(cell, side, size), door: 0 });
+      walls.push({ c: cellEdgeSegment(cell, side, size), door: 0 });
     }
   }
   return walls;
@@ -146,8 +146,48 @@ function mergeAxis(segments, fixed, start, end) {
 }
 
 /**
- * Round, drop zero-length and duplicate segments, and optionally merge touching
- * collinear axis-aligned segments that share the same properties.
+ * Remove the spans covered by door segments from collinear plain wall segments, so that a door
+ * drawn by one tile is not blocked by the full wall its neighbour draws on the shared edge.
+ * Only axis-aligned segments are considered.
+ */
+export function cutDoorsFromWalls(segments) {
+  const isDoor = s => (s.door ?? 0) > 0;
+  const doors = segments.filter(isDoor);
+  if (!doors.length) return segments;
+  const out = [];
+  for (const s of segments) {
+    if (isDoor(s)) { out.push(s); continue; }
+    const horizontal = s.c[1] === s.c[3];
+    const vertical = s.c[0] === s.c[2];
+    if (!horizontal && !vertical) { out.push(s); continue; }
+    const fixedIdx = horizontal ? 1 : 0;
+    const a = horizontal ? 0 : 1;
+    const b = horizontal ? 2 : 3;
+    let intervals = [[Math.min(s.c[a], s.c[b]), Math.max(s.c[a], s.c[b])]];
+    for (const d of doors) {
+      const sameLine = horizontal ? (d.c[1] === d.c[3] && d.c[1] === s.c[fixedIdx]) : (d.c[0] === d.c[2] && d.c[0] === s.c[fixedIdx]);
+      if (!sameLine) continue;
+      const d0 = Math.min(d.c[a], d.c[b]);
+      const d1 = Math.max(d.c[a], d.c[b]);
+      const next = [];
+      for (const [i0, i1] of intervals) {
+        if (d1 <= i0 || d0 >= i1) { next.push([i0, i1]); continue; }
+        if (i0 < d0) next.push([i0, d0]);
+        if (d1 < i1) next.push([d1, i1]);
+      }
+      intervals = next;
+    }
+    for (const [i0, i1] of intervals) {
+      const c = horizontal ? [i0, s.c[1], i1, s.c[1]] : [s.c[0], i0, s.c[0], i1];
+      out.push({ ...s, c });
+    }
+  }
+  return out;
+}
+
+/**
+ * Round, drop zero-length and duplicate segments, cut door spans out of plain walls, and
+ * optionally merge touching collinear axis-aligned segments that share the same properties.
  * @param {{c: number[]}[]} segments
  * @param {{merge?: boolean}} [options]
  */
@@ -159,12 +199,78 @@ export function mergeWalls(segments, { merge = true } = {}) {
     const key = `${s.c.join(",")}|${propsKey(s)}`;
     if (!unique.has(key)) unique.set(key, s);
   }
-  const list = [...unique.values()];
+  const list = cutDoorsFromWalls([...unique.values()]);
   if (!merge) return list;
   const horizontal = list.filter(s => s.c[1] === s.c[3]);
   const vertical = list.filter(s => s.c[0] === s.c[2] && s.c[1] !== s.c[3]);
   const other = list.filter(s => s.c[1] !== s.c[3] && s.c[0] !== s.c[2]);
   return [...mergeAxis(horizontal, 1, 0, 2), ...mergeAxis(vertical, 0, 1, 3), ...other];
+}
+
+/** Key used for cell sets. */
+export const cellKey = (i, j) => `${i},${j}`;
+
+/** Cell containing a point. */
+export function cellAt(x, y, size) {
+  return { i: Math.floor(y / size), j: Math.floor(x / size) };
+}
+
+/**
+ * Split a wall segment by a set of cells.
+ *
+ * Axis-aligned walls are cut at grid lines. A piece running along a grid line is "border" when
+ * exactly one of the two cells it separates is in the set, "inside" when both are, otherwise
+ * "outside". A piece inside a cell is "inside" when that cell is in the set. Walls that are not
+ * axis-aligned are classified whole by their midpoint.
+ *
+ * @param {{c: number[]}} segment
+ * @param {Set<string>} cellSet  Keys produced by `cellKey`.
+ * @param {number} size
+ * @returns {{outside: {c: number[]}[], border: {c: number[]}[], inside: {c: number[]}[]}}
+ */
+export function splitWallByCells(segment, cellSet, size) {
+  const result = { outside: [], border: [], inside: [] };
+  const [x1, y1, x2, y2] = segment.c;
+  const horizontal = y1 === y2;
+  const vertical = x1 === x2;
+  if (!horizontal && !vertical) {
+    const { i, j } = cellAt((x1 + x2) / 2, (y1 + y2) / 2, size);
+    (cellSet.has(cellKey(i, j)) ? result.inside : result.outside).push(segment);
+    return result;
+  }
+  const fixed = horizontal ? y1 : x1;
+  const a0 = Math.min(horizontal ? x1 : y1, horizontal ? x2 : y2);
+  const a1 = Math.max(horizontal ? x1 : y1, horizontal ? x2 : y2);
+  if (a0 === a1) return result;
+  const line = Math.round(fixed / size);
+  const onGridLine = Math.abs(fixed - line * size) < 1e-6;
+  const cuts = [a0];
+  for (let g = (Math.floor(a0 / size) + 1) * size; g < a1; g += size) cuts.push(g);
+  cuts.push(a1);
+  const pieces = { outside: [], border: [], inside: [] };
+  for (let k = 0; k + 1 < cuts.length; k++) {
+    const p0 = cuts[k];
+    const p1 = cuts[k + 1];
+    const along = Math.floor(((p0 + p1) / 2) / size);
+    let touched;
+    if (horizontal) touched = onGridLine ? [[line - 1, along], [line, along]] : [[Math.floor(fixed / size), along]];
+    else touched = onGridLine ? [[along, line - 1], [along, line]] : [[along, Math.floor(fixed / size)]];
+    const hits = touched.filter(([i, j]) => cellSet.has(cellKey(i, j))).length;
+    const bucket = hits === 0 ? "outside" : (hits === touched.length ? "inside" : "border");
+    const c = horizontal ? [p0, fixed, p1, fixed] : [fixed, p0, fixed, p1];
+    const list = pieces[bucket];
+    const last = list[list.length - 1];
+    if (last && (horizontal ? last[2] === c[0] : last[3] === c[1])) {
+      if (horizontal) last[2] = c[2]; else last[3] = c[3];
+    } else list.push(c);
+  }
+  for (const bucket of ["outside", "border", "inside"]) result[bucket] = pieces[bucket].map(c => ({ ...segment, c }));
+  return result;
+}
+
+/** Parts of a wall segment that lie outside a set of cells (border pieces count as inside). */
+export function wallPartsOutside(segment, cellSet, size) {
+  return splitWallByCells(segment, cellSet, size).outside;
 }
 
 /** Distance from a point to a segment. */

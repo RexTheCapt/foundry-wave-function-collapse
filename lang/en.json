@@ -3,6 +3,8 @@
     "Tools": {
       "Outline": "Draw dungeon outline (WFC)",
       "OutlineHint": "Click grid points to outline the dungeon. Click the first point or press Enter to finish, right-click to undo, Escape to clear.",
+      "Markers": "Door and edge markers (WFC)",
+      "MarkersHint": "Click a cell edge to require tags or a door there, click a cell center to require a door inside the tile. Shift-click reuses the last marker, right-click removes one.",
       "FromDrawing": "Generate dungeon from selected drawings (WFC)",
       "Collections": "Tile collections (WFC)",
       "Clear": "Remove generated dungeon (WFC)"
@@ -50,6 +52,8 @@
       "Description": "Description",
       "Boundary": "Default boundary tags",
       "BoundaryHint": "Suggested tags for tile sides that face the outline, e.g. \"wall\". Used to pre-fill the generate dialog.",
+      "Restricted": "Default restricted tags",
+      "RestrictedHint": "Pre-fills \"Only where marked\" in the generate dialog, e.g. \"door\".",
       "Dir": "Directory",
       "NoMappingYet": "This directory has no mapping.json yet. It is written when you save.",
       "AddTile": "Add tile",
@@ -89,9 +93,25 @@
       "Save": "Save tile",
       "Cancel": "Cancel"
     },
+    "Markers": {
+      "EdgeTitle": "Edge marker",
+      "CellTitle": "Cell marker",
+      "Tags": "Required side tags",
+      "TagsHint": "Both tiles touching this edge must have exactly these tags on that side. Leave empty to only require features.",
+      "Features": "Required features",
+      "FeaturesHint": "door or secret: at least one of the two tiles must draw that kind of door on this edge.",
+      "CellFeaturesHint": "door or secret: the tile placed here must draw that kind of door inside the tile.",
+      "EmptyHint": "Leave everything empty to remove the marker.",
+      "Set": "Set marker"
+    },
     "Generate": {
       "Title": "Generate dungeon",
       "Cells": "{count} grid cells inside the outline.",
+      "Markers": "{count} markers on this scene.",
+      "Restricted": "Only where marked",
+      "RestrictedHint": "Tags and door features that may only appear where a marker asks for them, e.g. door. Leave empty to let the generator place them freely.",
+      "MatchSurroundings": "Match surrounding tiles",
+      "MatchSurroundingsHint": "Previously generated tiles next to the outline constrain the new tiles, and no outline wall is placed between them.",
       "Collections": "Tile collections to use",
       "NoCollections": "No tile collections with tiles are registered. Open the collections menu to add some.",
       "SelectAll": "All",
@@ -118,6 +138,8 @@
       "Content": "Remove tiles and walls placed by this module on the current scene.",
       "Last": "Last generation",
       "All": "Everything generated",
+      "Markers": "Markers ({count})",
+      "MarkersDone": "Removed all markers from the scene.",
       "Cancel": "Cancel",
       "Done": "Removed {tiles} tiles and {walls} walls.",
       "Nothing": "Nothing to remove."

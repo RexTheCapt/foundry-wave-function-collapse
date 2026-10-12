@@ -5,6 +5,7 @@ export const SAMPLE_COLLECTION = `${MODULE_PATH}/collections/sample-dungeon`;
 export const MAPPING_FILE = "mapping.json";
 
 export const TOOL_OUTLINE = "wfc-outline";
+export const TOOL_MARKERS = "wfc-markers";
 export const TOOL_FROM_DRAWING = "wfc-from-drawing";
 export const TOOL_COLLECTIONS = "wfc-collections";
 export const TOOL_CLEAR = "wfc-clear";

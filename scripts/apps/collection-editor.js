@@ -53,6 +53,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
       name: mapping.name,
       description: mapping.description,
       boundary: mapping.boundary.join(", "),
+      restricted: mapping.restricted.join(", "),
       hasMapping: this.collection.hasMapping,
       error: this.collection.error,
       tiles
@@ -66,6 +67,7 @@ export class CollectionEditor extends HandlebarsApplicationMixin(ApplicationV2) 
     mapping.name = form.elements.name?.value.trim() || mapping.name;
     mapping.description = form.elements.description?.value ?? "";
     mapping.boundary = normalizeTags(form.elements.boundary?.value ?? "");
+    mapping.restricted = normalizeTags(form.elements.restricted?.value ?? "");
   }
 
   async save() {

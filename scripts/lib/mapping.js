@@ -5,6 +5,7 @@
  *   "name": "Stone dungeon",
  *   "description": "Optional text",
  *   "boundary": ["wall"],              // optional default boundary tags for the generator
+ *   "restricted": ["door"],            // optional tags that may only appear on marked edges
  *   "tiles": {
  *     "floor.png": {                   // file name, relative to the collection directory
  *       "tags": { "n": ["floor"], "e": ["floor"], "s": ["floor"], "w": ["floor"] },
@@ -21,7 +22,7 @@ import { SIDES, normalizeTags, normalizeTile } from "./wfc.js";
 export const MAPPING_VERSION = 1;
 
 export function emptyMapping(name = "") {
-  return { version: MAPPING_VERSION, name, description: "", boundary: [], tiles: {} };
+  return { version: MAPPING_VERSION, name, description: "", boundary: [], restricted: [], tiles: {} };
 }
 
 export function emptyTileEntry() {
@@ -50,6 +51,7 @@ export function normalizeMapping(raw, fallbackName = "") {
   if (typeof raw.name === "string" && raw.name.trim()) mapping.name = raw.name.trim();
   if (typeof raw.description === "string") mapping.description = raw.description;
   mapping.boundary = normalizeTags(raw.boundary);
+  mapping.restricted = normalizeTags(raw.restricted);
   const tiles = raw.tiles && typeof raw.tiles === "object" ? raw.tiles : {};
   for (const [file, entry] of Object.entries(tiles)) {
     if (!file || file.includes("/") || file.includes("\\")) continue;

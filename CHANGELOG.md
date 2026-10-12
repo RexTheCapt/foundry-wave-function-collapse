@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Regenerate part of a dungeon: tiles inside the outline are replaced while generated tiles next to
+  it constrain the new tiles ("Match surrounding tiles"). Existing walls are clipped to the outline
+  instead of deleted and no outline wall is placed towards existing tiles.
+- Door and edge markers tool: pin required side tags or door features to a cell edge, or require a
+  door inside a cell. Markers are stored on the scene and drawn while the Tiles controls are open.
+- "Only where marked" restriction keeps tags and door features (door, secret) out of every place
+  without a matching marker.
+- Door features are read from a tile's door segments, so a tile can draw a complete door on a
+  wall-tagged side or a door across its middle. Plain walls on the same line are cut around doors.
+- Sample collection gains door-wall.png and door-mid.png. Collections may declare default
+  restricted tags.
+
 ## 0.1.1
 
 - Fixed the outline tool never activating on Foundry v13 and v14, where selecting a tool does not

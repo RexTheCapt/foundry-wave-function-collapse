@@ -1,4 +1,5 @@
-import { MODULE_ID, SAMPLE_COLLECTION, TOOL_OUTLINE, TOOL_FROM_DRAWING, TOOL_COLLECTIONS, TOOL_CLEAR } from "./constants.js";
+import { MODULE_ID, SAMPLE_COLLECTION, TOOL_OUTLINE, TOOL_MARKERS, TOOL_FROM_DRAWING, TOOL_COLLECTIONS, TOOL_CLEAR } from "./constants.js";
+import { MarkerLayer, MarkerTool, clearMarkers, getMarkers } from "./markers.js";
 import { OutlineTool } from "./outline-tool.js";
 import { log } from "./log.js";
 import { assertSquareGrid, clearGenerated, generateDungeon } from "./generator.js";
@@ -10,6 +11,8 @@ import { CollectionsApp } from "./apps/collections-app.js";
 import { GenerateDialog } from "./apps/generate-dialog.js";
 
 const outlineTool = new OutlineTool({ onFinish: polygon => generateForPolygons([polygon]) });
+const markerLayer = new MarkerLayer();
+const markerTool = new MarkerTool({ layer: markerLayer });
 
 /* -------------------------------------------- */
 /*  Settings                                    */
@@ -52,6 +55,12 @@ function registerSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+  game.settings.register(MODULE_ID, "lastMarker", {
+    scope: "client",
+    config: false,
+    type: Object,
+    default: { tags: "", features: "door" }
   });
   game.settings.register(MODULE_ID, "lastSelection", {
     scope: "client",
@@ -151,11 +160,16 @@ async function clearDialog() {
     buttons: [
       { action: "last", label: game.i18n.localize("WFC.Clear.Last"), icon: "fa-solid fa-rotate-left", default: true },
       { action: "all", label: game.i18n.localize("WFC.Clear.All"), icon: "fa-solid fa-trash" },
+      { action: "markers", label: game.i18n.format("WFC.Clear.Markers", { count: getMarkers().length }), icon: "fa-solid fa-door-open" },
       { action: "cancel", label: game.i18n.localize("WFC.Clear.Cancel"), icon: "fa-solid fa-xmark" }
     ],
     rejectClose: false
   });
   if (choice === "last" || choice === "all") await clearGenerated(choice);
+  else if (choice === "markers") {
+    await clearMarkers();
+    ui.notifications.info(game.i18n.localize("WFC.Clear.MarkersDone"));
+  }
 }
 
 /* -------------------------------------------- */
@@ -172,19 +186,26 @@ function getActiveTool() {
   return nameOf(ui.controls?.tool) ?? ui.controls?.activeTool ?? null;
 }
 
+const TOOLS = { [TOOL_OUTLINE]: () => outlineTool, [TOOL_MARKERS]: () => markerTool };
+
 function syncOutlineTool() {
   const control = getActiveControl();
   const tool = getActiveTool();
-  const active = canvas?.ready && control === "tiles" && tool === TOOL_OUTLINE;
-  log.debug(`syncOutlineTool: control=${control} tool=${tool} canvasReady=${canvas?.ready} -> ${active ? "activate" : "deactivate"}`);
-  if (active) outlineTool.activate();
-  else outlineTool.deactivate();
+  const onTiles = canvas?.ready && control === "tiles";
+  log.debug(`syncTools: control=${control} tool=${tool} canvasReady=${canvas?.ready}`);
+  for (const [name, get] of Object.entries(TOOLS)) {
+    if (onTiles && tool === name) get().activate();
+    else get().deactivate();
+  }
+  if (onTiles) markerLayer.show();
+  else markerLayer.hide();
 }
 
 function registerControls(controls) {
   if (!game.user.isGM) return;
   const tileTools = [
     { name: TOOL_OUTLINE, title: "WFC.Tools.Outline", icon: "fa-solid fa-draw-polygon" },
+    { name: TOOL_MARKERS, title: "WFC.Tools.Markers", icon: "fa-solid fa-door-open" },
     { name: TOOL_COLLECTIONS, title: "WFC.Tools.Collections", icon: "fa-solid fa-layer-group", button: true, handler: () => CollectionsApp.open() },
     { name: TOOL_CLEAR, title: "WFC.Tools.Clear", icon: "fa-solid fa-eraser", button: true, handler: clearDialog }
   ];
@@ -233,8 +254,9 @@ function registerControls(controls) {
         tool.creation = false;
         tool.onChange = (event, active) => {
           log.debug(`tool "${def.name}" onChange active=${active}`);
-          if (active) outlineTool.activate();
-          else outlineTool.deactivate();
+          const instance = TOOLS[def.name]();
+          if (active) instance.activate();
+          else instance.deactivate();
         };
       }
       control.tools[def.name] = tool;
@@ -261,6 +283,9 @@ Hooks.once("ready", () => {
     clearGenerated,
     openCollections: () => CollectionsApp.open(),
     outlineTool,
+    markerTool,
+    getMarkers,
+    clearMarkers,
     wfc,
     geometry
   };
@@ -271,5 +296,12 @@ Hooks.on("getSceneControlButtons", registerControls);
 Hooks.on("renderSceneControls", syncOutlineTool);
 Hooks.on("canvasReady", syncOutlineTool);
 Hooks.on("activateTilesLayer", () => { log.debug("activateTilesLayer"); syncOutlineTool(); });
-Hooks.on("deactivateTilesLayer", () => { log.debug("deactivateTilesLayer"); outlineTool.deactivate(); });
-Hooks.on("canvasTearDown", () => { log.debug("canvasTearDown"); outlineTool.deactivate(); });
+Hooks.on("deactivateTilesLayer", () => { log.debug("deactivateTilesLayer"); outlineTool.deactivate(); markerTool.deactivate(); markerLayer.hide(); });
+Hooks.on("canvasTearDown", () => { log.debug("canvasTearDown"); outlineTool.deactivate(); markerTool.deactivate(); markerLayer.hide(); });
+Hooks.on("updateScene", (scene, changes) => {
+  if (scene.id !== canvas.scene?.id) return;
+  if (foundry.utils.hasProperty(changes, `flags.${MODULE_ID}`) || foundry.utils.hasProperty(changes, `flags.-=${MODULE_ID}`)) {
+    log.debug("scene markers changed, redrawing");
+    markerLayer.refresh();
+  }
+});

@@ -146,7 +146,11 @@ function sideWalls(side, door = false) {
   ];
 }
 
-/** Tile definitions: which sides are walls ("w"), doors ("d") or open floor ("f"). */
+/**
+ * Tile definitions: which sides are walls ("w"), half doors ("d", tagged door so the neighbour
+ * draws the other half), full doors ("D", tagged wall so any wall neighbour fits) or open floor
+ * ("f"). `midDoor` adds a door across the middle of the tile.
+ */
 const TILES = [
   { file: "floor.png", sides: "ffff", weight: 4, rotate: false, base: "floor" },
   { file: "wall-1.png", sides: "wfff", weight: 3, rotate: true, base: "floor" },
@@ -156,15 +160,17 @@ const TILES = [
   { file: "rock.png", sides: "wwww", weight: 0.4, rotate: false, base: "rock" },
   { file: "door-1.png", sides: "dfff", weight: 0.6, rotate: true, base: "floor" },
   { file: "door-corner.png", sides: "dwff", weight: 0.5, rotate: true, base: "floor" },
-  { file: "door-3.png", sides: "dwfw", weight: 0.4, rotate: true, base: "floor" }
+  { file: "door-3.png", sides: "dwfw", weight: 0.4, rotate: true, base: "floor" },
+  { file: "door-wall.png", sides: "Dfff", weight: 0.5, rotate: true, base: "floor" },
+  { file: "door-mid.png", sides: "wfwf", weight: 0.5, rotate: true, base: "floor", midDoor: true }
 ];
-const TAG = { f: ["floor"], w: ["wall"], d: ["door"] };
+const TAG = { f: ["floor"], w: ["wall"], d: ["door"], D: ["wall"] };
 
 fs.mkdirSync(OUT, { recursive: true });
 const mapping = {
   version: 1,
   name: "Sample dungeon",
-  description: "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline.",
+  description: "Simple generated stone tiles. Side tags: floor, wall, door. Use boundary tag \"wall\" to close the outline. door-wall.png draws a complete door on a wall-tagged side, door-mid.png has a door across the middle; restrict \"door\" to place them only at markers.",
   boundary: ["wall"],
   tiles: {}
 };
@@ -177,8 +183,16 @@ TILES.forEach((def, index) => {
     const kind = def.sides[k];
     tags[side] = TAG[kind];
     if (kind === "w") { wallBand(r, side); walls.push(...sideWalls(side)); }
-    if (kind === "d") { wallBand(r, side, DOOR_GAP); walls.push(...sideWalls(side, true)); }
+    if (kind === "d" || kind === "D") { wallBand(r, side, DOOR_GAP); walls.push(...sideWalls(side, true)); }
   });
+  if (def.midDoor) {
+    // A door across the middle of the tile, between the north and south walls.
+    const x0 = Math.round(SIZE / 2) - 6;
+    r.rect(x0, BAND, 12, SIZE - 2 * BAND, DOOR, 10);
+    r.rect(x0, BAND, 1, SIZE - 2 * BAND, DOOR_DARK);
+    r.rect(x0 + 11, BAND, 1, SIZE - 2 * BAND, DOOR_DARK);
+    walls.push({ c: [0.5, 0, 0.5, 1], door: 1 });
+  }
   fs.writeFileSync(path.join(OUT, def.file), encodePNG(SIZE, SIZE, r.px));
   mapping.tiles[def.file] = { tags, walls, weight: def.weight, rotate: def.rotate };
 });

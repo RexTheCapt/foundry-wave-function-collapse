@@ -17,6 +17,10 @@ off the outline.
   are placed as Foundry walls when the tile is used.
 - **Multiple collections** can be combined in one generation. Tags are global, so tiles from
   different collections connect when their tags agree.
+- **Regenerate part of a dungeon**: draw an outline over an existing generation. Tiles inside are
+  replaced, tiles around it stay and constrain the new ones, walls are clipped at the border.
+- **Markers**: pin required tags or a door to a cell edge, or require a door inside a cell, then
+  restrict doors to marked places only.
 - Rotation support, weights, seeds for reproducible layouts, and a sample collection to start with.
 
 ## Installation
@@ -54,13 +58,39 @@ Options:
 
 | Option | Effect |
 | --- | --- |
+| Only where marked | Tags and door features listed here (for example `door`) may only appear where a marker asks for them. |
+| Match surrounding tiles | Generated tiles next to the outline constrain the new tiles, and no outline wall is placed between them. |
 | Walls along the outline | Create wall segments on the outer edge of the outline. |
 | Walls from tiles | Create the walls defined on each placed tile. |
 | Merge collinear walls | Join touching wall segments of the same type into longer walls. |
 | Replace previous generation | Remove tiles and walls this module placed inside the outline before placing new ones. |
 
-**Remove generated dungeon (WFC)** removes the last generation or everything the module placed on
-the scene.
+**Remove generated dungeon (WFC)** removes the last generation, everything the module placed on
+the scene, or all markers.
+
+### Regenerating an area
+
+Draw a new outline over part of an existing dungeon and generate again. With **Replace previous
+generation** on, the tiles inside the outline are removed. With **Match surrounding tiles** on, the
+tiles just outside the outline keep their place and the new tiles must match their side tags, so
+corridors and rooms stay connected. Existing walls that cross the outline are shortened to the
+outside, and walls on the shared border are kept in the pool so doors in neighbouring tiles survive.
+
+### Markers: doors where you want them
+
+Select **Door and edge markers (WFC)** in the Tiles controls.
+
+- Click near a cell edge to place an **edge marker**. It can require side tags on that edge (both
+  tiles must have exactly those tags there) and door features (`door` or `secret`): at least one of
+  the two tiles must draw that kind of door on the edge.
+- Click the center of a cell to place a **cell marker** that requires a door drawn inside the tile,
+  for example a door across a corridor.
+- Shift-click repeats the last marker, right-click removes one. Markers are saved with the scene and
+  drawn in green while the Tiles controls are open.
+
+To make doors appear *only* at markers, put `door` in **Only where marked** in the generate dialog.
+Tiles with a door on an unmarked edge or inside an unmarked cell are then never placed there. The
+`secret` feature works the same way for secret doors.
 
 ### 3. Manage tile collections
 
@@ -86,9 +116,26 @@ Open **Tile collections (WFC)** from the Tiles controls or from the module setti
 - When a tile allows rotation, its tags and walls rotate with it (clockwise: north becomes east).
 
 Because adjacent tiles both draw their own walls on the shared edge, identical wall segments are
-removed before placing, so a wall tagged side on both tiles results in a single wall. Use a distinct
-tag (for example `door`) on both sides of a doorway so that a door tile is always paired with
-another door tile.
+removed before placing, so a wall tagged side on both tiles results in a single wall.
+
+### Doors
+
+A door is any wall segment of type *Door* or *Secret door* in the tile editor. The generator reads
+**door features** from them:
+
+- A door segment lying on a tile edge is a door feature of that side.
+- Any other door segment is a door feature of the tile center.
+
+Two ways to build door tiles:
+
+1. **Half doors**: both tiles draw their half of the door and the shared side is tagged `door`, so a
+   door tile is always paired with another door tile (`door-1.png` in the sample).
+2. **Door as a wall**: one tile draws the complete door on its edge and tags that side `wall`, so it
+   can sit next to any wall tile (`door-wall.png` in the sample). The neighbour's plain wall on that
+   line is cut away around the door so it stays passable.
+
+A door in the middle of a tile (`door-mid.png`) is a center feature and can be demanded with a cell
+marker.
 
 ## mapping.json format
 
@@ -116,21 +163,23 @@ Each collection directory contains a `mapping.json` that maps every tile image i
   (bottom/right). `door` is `0` wall, `1` door, `2` secret door.
 - `weight` is the relative probability of the tile. `rotate` enables the three rotated variants.
 - `boundary` pre-fills the boundary tags in the generate dialog.
+- `restricted` pre-fills "Only where marked" in the generate dialog.
 
 You can edit the file by hand; the collection editor reloads it from disk.
 
 ## Sample collection
 
-`collections/sample-dungeon` ships with nine generated stone tiles using the tags `floor`, `wall`
-and `door`. It is registered by default and is a good template for your own art. Regenerate it with
+`collections/sample-dungeon` ships with eleven generated stone tiles using the tags `floor`, `wall`
+and `door`, including a door drawn as a wall and a door across the middle of a corridor. It is registered by default and is a good template for your own art. Regenerate it with
 `npm run sample-tiles`.
 
 ## API
 
 `game.modules.get("wave-function-collapse").api` exposes:
 
-- `generateDungeon({ polygon, collectionDirs, seed, boundaryTags, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls })`
+- `generateDungeon({ polygon, collectionDirs, seed, boundaryTags, restrictedTags, matchSurroundings, placeOutlineWalls, placeTileWalls, clearExisting, mergeWalls })`
 - `clearGenerated("last" | "all")`
+- `getMarkers()` and `clearMarkers()` for the current scene.
 - `openCollections()`
 - `wfc` and `geometry`, the pure solver and grid helpers.
 

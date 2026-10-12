@@ -1,5 +1,5 @@
 <div class="wfc-part wfc-part-generate">
-<p class="hint">{{localize "WFC.Generate.Cells" count=cellCount}}</p>
+<p class="hint">{{localize "WFC.Generate.Cells" count=cellCount}} {{localize "WFC.Generate.Markers" count=markerCount}}</p>
 <fieldset class="wfc-collection-picker">
   <legend>{{localize "WFC.Generate.Collections"}}</legend>
   <div class="wfc-toolbar">
@@ -24,6 +24,16 @@
   <label>{{localize "WFC.Generate.Boundary"}}</label>
   <div class="form-fields"><input type="text" name="boundaryTags" value="{{boundaryTags}}"></div>
   <p class="hint">{{localize "WFC.Generate.BoundaryHint"}}</p>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.Restricted"}}</label>
+  <div class="form-fields"><input type="text" name="restrictedTags" value="{{restrictedTags}}" placeholder="door"></div>
+  <p class="hint">{{localize "WFC.Generate.RestrictedHint"}}</p>
+</div>
+<div class="form-group">
+  <label>{{localize "WFC.Generate.MatchSurroundings"}}</label>
+  <div class="form-fields"><input type="checkbox" name="matchSurroundings" {{#if matchSurroundings}}checked{{/if}}></div>
+  <p class="hint">{{localize "WFC.Generate.MatchSurroundingsHint"}}</p>
 </div>
 <div class="form-group">
   <label>{{localize "WFC.Generate.OutlineWalls"}}</label>
